@@ -5,6 +5,8 @@ module RubyPtp
       :sequenceId, :controlField, :logMessageInterval, :originTimestamp,
       :receiveTimestamp, :requestingPortIdentity
 
+    alias_attribute :type, :messageType
+
     # Define message types
     SYNC                  = 0x0
     DELAY_REQ             = 0x1
