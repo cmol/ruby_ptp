@@ -27,8 +27,13 @@ module RubyPtp
               SLAVE:        0x09}
 
     def initialize options = {}
-      # Get IP of interface
+      # Get IP and MAC of interface
       @ipaddr = getIP(options[:interface])
+      @hwaddr = getMAC(options[:interface])
+
+      # Do padding of MAC to create port identity
+      @portIdentity = @hwaddr.split(":").map!{|a| a.to_i(16)}
+        .insert(3, 0xff, 0xff, 0xff).pack("L>*")
 
       # Set up initial states
       @state = STATES[:INITIALIZING]
@@ -181,7 +186,7 @@ module RubyPtp
         (@activestamps[1] - @activestamps[0]) -
         (@activestamps[3] - @activestamps[2])) / 2
 
-      # TODO: Calculate frequency error
+      # Calculate frequency error
       if @timestamps[-2]
         old = @timestamps[-2]
         old_delay = @delay[-2]
@@ -201,6 +206,12 @@ module RubyPtp
       timen = BigDecimal.new(nsec,9 + sec.floog.to_s.length)
       timen = timen.div(1e9)
       time.add(timen)
+    end
+
+    def getMAC(interface)
+      cmd = `ifconfig #{interface}`
+      mac = cmd.match(/(([A-F0-9]{2}:){5}[A-F0-9]{2})/i).captures
+      return mac.first
     end
   end
 end
