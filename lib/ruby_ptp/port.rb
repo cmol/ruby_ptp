@@ -33,7 +33,7 @@ module RubyPtp
 
       # Do padding of MAC to create port identity
       @portIdentity = @hwaddr.split(":").map!{|a| a.to_i(16)}
-        .insert(3, 0xff, 0xff, 0xff).pack("L>*")
+        .insert(3, 0xff, 0xff, 0xff).pack("C*").unpack("Q>").first
 
       # Set up initial states
       @state = STATES[:INITIALIZING]
