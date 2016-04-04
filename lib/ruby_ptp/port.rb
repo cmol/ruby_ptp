@@ -31,7 +31,7 @@ module RubyPtp
       @ipaddr = getIP(options[:interface])
       @hwaddr = getMAC(options[:interface])
 
-      # Do padding of MAC to create port identity
+      # Do padding of MAC to create port identity and revert it to a 64-bit int
       @portIdentity = @hwaddr.split(":").map!{|a| a.to_i(16)}
         .insert(3, 0xff, 0xff, 0xff).pack("C*").unpack("Q>").first
 
