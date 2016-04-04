@@ -37,6 +37,7 @@ module RubyPtp
       # Set up initial states
       @state = STATES[:INITIALIZING]
       @slave_state = :WAIT_FOR_SYNC
+      @sequenceId = 1
 
       # Set mode of timestamps
       @ts_mode = options[:ts_mode]
@@ -56,13 +57,17 @@ module RubyPtp
       @general_socket = UDPSocket.new
       @general_socket.setsockopt(:SOCKET,
                              Socket::IP_MULTICAST_IF, IPAddr.new(@ipaddr).hton)
-      @general_socket.bind(@ipaddr, GENERAL_PORT)
+      ip = IPAddr.new(PTP_MULTICAST_ADDR).hton + IPAddr.new("0.0.0.0").hton
+      @general_socket.setsockopt(Socket::IPPROTO_IP,
+                                 Socket::IP_ADD_MEMBERSHIP, ip)
+      @general_socket.bind(Socket::INADDR_ANY, GENERAL_PORT)
 
       # We are only running in slave mode
       @state = STATES[:SLAVE]
     end
 
     def startPtp options = {}
+      Thread.abort_on_exception = true
       general = Thread.new do
         while @state == STATES[:SLAVE] do
           msg, addr, rflags, *cfg = @general_socket.recvmsg
@@ -96,14 +101,17 @@ module RubyPtp
         raise NotImplementedError.new("HW TIMESTAMPS")
 
       else
-        socket = Socket.new(Socket::AF_INET, Socket::SOCK_DGRAM, 0)
-        socket.setsockopt(:SOCKET,
-                          Socket::IP_MULTICAST_IF, IPAddr.new(@ipaddr).hton)
+        #socket = Socket.new(Socket::AF_INET, Socket::SOCK_DGRAM, 0)
+        #socket.setsockopt(:SOCKET,
+        #                  Socket::IP_MULTICAST_IF, IPAddr.new(@ipaddr).hton)
+        socket = UDPSocket.new
         socket.setsockopt(:SOCKET, :TIMESTAMPNS, true)
+        ip = IPAddr.new(PTP_MULTICAST_ADDR).hton + IPAddr.new("0.0.0.0").hton
+        socket.setsockopt(Socket::IPPROTO_IP, Socket::IP_ADD_MEMBERSHIP, ip)
+        socket.bind(Socket::INADDR_ANY, EVENT_PORT)
       end
 
-      #socket.bind(@ipaddr, EVENT_PORT)
-      socket.bind(Addrinfo.udp(@ipaddr, EVENT_PORT))
+      #socket.bind(Addrinfo.udp(@ipaddr, EVENT_PORT))
       return socket
     end
 
@@ -113,27 +121,29 @@ module RubyPtp
 
     def parseEvent(msg, addr, rflags, cfg, ts)
       message = getMessage(msg)
+      puts message.inspect
+      puts msg.length
 
       # Figure out what to do with the packages
       case message.type
 
       # In case of a SYNC
-      when RubyPtp::Message.SYNC
+      when RubyPtp::Message::SYNC
         if @slave_state == :WAIT_FOR_SYNC
           if message.originTimestamp == -1
             @slave_state = :WAIT_FOR_FOLLOW_UP
           else
             t1 = timeArrToBigDec(*message.originTimestamp)
             t2 = timeArrToBigDec(*ts)
-            recordTimestamps(ti: t1, t2: t2)
-            t3 = sendDelayResq(message)
+            recordTimestamps(t1: t1, t2: t2)
+            t3 = sendDelayReq()
             recordTimestamps(t3: timeArrToBigDec(*t3))
             @slave_state = :WAIT_FOR_DELAY_RESP
           end
         end
 
       # In case of a FOLLOW_UP
-      when RubyPtp::Message.FOLLOW_UP
+      when RubyPtp::Message::FOLLOW_UP
         if @slave_state == :WAIT_FOR_FOLLOW_UP
           recordTimestamps(ti: message.originTimestamp, t2: ts)
           t3 = sendDelayResq(message)
@@ -142,13 +152,15 @@ module RubyPtp
         end
 
       # In case of a DELAY_RESP
-      when RubyPtp::Message.DELAY_RESP
+      when RubyPtp::Message::DELAY_RESP
         if @slave_state == :WAIT_FOR_DELAY_RESP
           recordTimestamps(t4: message.originTimestamp)
           updateTime()
           @slave_state = :WAIT_FOR_SYNC
         end
       end
+
+      puts @slave_state
     end
 
     def parseGeneral(msg, addr, rflags, cfg)
@@ -157,7 +169,7 @@ module RubyPtp
       # TODO: Yeah, figure out how to handle general messages and how many of
       # them we actually need to do something about...
       case message.type
-      when ANNOUNCE
+      when Message::ANNOUNCE
       end
     end
 
@@ -203,9 +215,9 @@ module RubyPtp
 
     def timeArrToBigDec(sec, nsec)
       time  = BigDecimal.new(sec, 9 + sec.floor.to_s.length)
-      timen = BigDecimal.new(nsec,9 + sec.floog.to_s.length)
+      timen = BigDecimal.new(nsec,9 + sec.floor.to_s.length)
       timen = timen.div(1e9)
-      time.add(timen)
+      time + timen
     end
 
     def getMAC(interface)
@@ -220,13 +232,14 @@ module RubyPtp
       return ip.first
     end
 
-    def sendDelayResq
+    def sendDelayReq
       msg = Message.new
       msg.sourcePortIdentity = @portIdentity
-      packet = msg.readyMessage(Message.DELAY_REQ)
+      @sequenceId = (@sequenceId + 1) % 0xffff
+      packet = msg.readyMessage(Message::DELAY_REQ, @sequenceId)
       @event_socket.send(packet, 0, PTP_MULTICAST_ADDR, EVENT_PORT)
       now = Time.now.utc
-      return timeArrToBigDec([now.to_i, now.usec])
+      return [now.to_i, now.usec]
     end
   end
 end

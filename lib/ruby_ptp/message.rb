@@ -40,7 +40,7 @@ module RubyPtp
       tmp_tran_type, @versionPTP, @messageLength, @domainNumber, res1,
         @flagField, @correctionField, res2, @sourcePortIdentity, portno,
         @sequenceId, @controlField,
-        @logMessageInterval = header.unpack("CCS>CCS>Q>L>Q>S>S>CC")
+        @logMessageInterval = header.unpack("CCS>CCSQ>L>Q>S>S>CC")
 
       # Fixup fields of 4 bits or not in 2^n octets
       @transport = tmp_tran_type >> 4
@@ -53,11 +53,11 @@ module RubyPtp
       # Parse SYNC and FOLLOW_UP, and DELAY_REQ as one since they are mostly
       # identical anyway.
       when SYNC, FOLLOW_UP, DELAY_REQ
-        sec1, sec2, nsec = payload.unpack("LSL")
+        sec1, sec2, nsec = payload.unpack("L>S>L>")
         sec = (sec1 << 16) | sec2
 
         # Check if the sending clock is a two-step
-        if (@flagField & 1) == 1 || sec == 0 && nsec == 0
+        if (@flagField & 2) == 2 || sec == 0 && nsec == 0
           @originTimestamp = -1
         else
           @originTimestamp = [sec, nsec]
@@ -91,7 +91,7 @@ module RubyPtp
     end
 
     # Construct packet for sending and return the string to send
-    def readyMessage(type)
+    def readyMessage(type, id)
 
       # Create the packet payload
       payload = nil
@@ -105,6 +105,7 @@ module RubyPtp
         @correctionField    = 0x0
         @messageLength      = 0x2c
         @logMessageInterval = 0x7f
+        @sequenceId         = id
       end
 
       # Make the header for the packet
@@ -118,9 +119,10 @@ module RubyPtp
                 0x0,                          # L> - reserved
                 @sourcePortIdentity,          # Q>
                 @sourcePortIdentityPortNumer, # S>
+                @sequenceId,                  # S>
                 @controlField,                # C
                 @logMessageInterval           # C
-        ].pack("CCS>CCS>Q>L>Q>S>CC")
+        ].pack("CCS>CCS>Q>L>Q>S>S>CC")
 
       return header + payload
     end
