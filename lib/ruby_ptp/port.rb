@@ -213,6 +213,21 @@ module RubyPtp
       mac = cmd.match(/(([A-F0-9]{2}:){5}[A-F0-9]{2})/i).captures
       return mac.first
     end
+
+    def getIP(interface)
+      cmd = `ip addr show #{interface}`
+      ip = cmd.match(/inet ((\d{1,3}\.){3}\d{1,3})\/\d{1,2}/).captures
+      return ip.first
+    end
+
+    def sendDelayResq
+      msg = Message.new
+      msg.sourcePortIdentity = @portIdentity
+      packet = msg.readyMessage(Message.DELAY_REQ)
+      @event_socket.send(packet, 0, PTP_MULTICAST_ADDR, EVENT_PORT)
+      now = Time.now.utc
+      return timeArrToBigDec([now.to_i, now.usec])
+    end
   end
 end
 
