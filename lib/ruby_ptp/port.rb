@@ -122,7 +122,6 @@ module RubyPtp
     def parseEvent(msg, addr, rflags, cfg, ts)
       message = getMessage(msg)
       puts message.inspect
-      puts msg.length
 
       # Figure out what to do with the packages
       case message.type
@@ -132,6 +131,7 @@ module RubyPtp
         if @slave_state == :WAIT_FOR_SYNC
           if message.originTimestamp == -1
             @slave_state = :WAIT_FOR_FOLLOW_UP
+            recordTimestamps(t2: ts)
           else
             t1 = timeArrToBigDec(*message.originTimestamp)
             t2 = timeArrToBigDec(*ts)
@@ -141,16 +141,27 @@ module RubyPtp
             @slave_state = :WAIT_FOR_DELAY_RESP
           end
         end
+      end
+
+      puts @slave_state
+    end
+
+    def parseGeneral(msg, addr, rflags, cfg)
+      message = getMessage(msg)
+      puts message.inspect
+
+      case message.type
+      when Message::ANNOUNCE
+        # bob...
 
       # In case of a FOLLOW_UP
       when RubyPtp::Message::FOLLOW_UP
         if @slave_state == :WAIT_FOR_FOLLOW_UP
-          recordTimestamps(ti: message.originTimestamp, t2: ts)
-          t3 = sendDelayResq(message)
-          recordTimestamps(t3: t3)
+          recordTimestamps(t1: timeArrToBigDec(*message.originTimestamp))
+          t3 = sendDelayReq()
+          recordTimestamps(t3: timeArrToBigDec(*t3))
           @slave_state = :WAIT_FOR_DELAY_RESP
         end
-
       # In case of a DELAY_RESP
       when RubyPtp::Message::DELAY_RESP
         if @slave_state == :WAIT_FOR_DELAY_RESP
@@ -161,16 +172,6 @@ module RubyPtp
       end
 
       puts @slave_state
-    end
-
-    def parseGeneral(msg, addr, rflags, cfg)
-      message = getMessage(msg)
-
-      # TODO: Yeah, figure out how to handle general messages and how many of
-      # them we actually need to do something about...
-      case message.type
-      when Message::ANNOUNCE
-      end
     end
 
     # Update whatever timestamps are being thrown at us

@@ -78,7 +78,8 @@ module RubyPtp
       when PDELAY_RESP_FOLLOW_UP
         raise NotImplementedError.new("PDELAY_RESP_FOLLOW_UP")
       when ANNOUNCE
-        raise NotImplementedError.new("ANNOUNCE")
+        #raise NotImplementedError.new("ANNOUNCE")
+        puts "Announce...."
       when SIGNALING
         raise NotImplementedError.new("SIGNALING")
       when MANAGEMENT
