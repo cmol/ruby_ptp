@@ -6,7 +6,6 @@ require 'bigdecimal'
 
 module RubyPtp
 
-
   class Port
     attr_reader :state, :ipaddr, :ts_mode, :slave_state, :timestamps,
       :savestamps, :activestamps, :delay, :phase_error, :freq_error
@@ -51,7 +50,7 @@ module RubyPtp
       @activestamps  = [].fill(nil, 0, 4)
 
       # Create event socket
-      @event_socket = setup_event_socket(options[:interface])
+      @event_socket = setupEventSocket(options[:interface])
 
       # Generate socket for general messages
       @general_socket = UDPSocket.new
@@ -84,15 +83,15 @@ module RubyPtp
         @event_socket.close
       end
 
-      Thread.join(general)
-      Thread.join(event)
+      general.join
+      event.join
     end
 
     private
 
 
     # Either setup socket in HW or SW timestamping mode
-    def setupEventSocket
+    def setupEventSocket(interface)
       if @ts_mode == :TIMESTAMPHW
         raise NotImplementedError.new("HW TIMESTAMPS")
 
@@ -100,10 +99,11 @@ module RubyPtp
         socket = Socket.new(Socket::AF_INET, Socket::SOCK_DGRAM, 0)
         socket.setsockopt(:SOCKET,
                           Socket::IP_MULTICAST_IF, IPAddr.new(@ipaddr).hton)
-        socket.setsockopt(:SOCKET, :TIMESTAMPINGNS, true)
+        socket.setsockopt(:SOCKET, :TIMESTAMPNS, true)
       end
 
-      socket.bind(@ipaddr, EVENT_PORT)
+      #socket.bind(@ipaddr, EVENT_PORT)
+      socket.bind(Addrinfo.udp(@ipaddr, EVENT_PORT))
       return socket
     end
 
