@@ -116,7 +116,7 @@ module RubyPtp
     end
 
     def getMessage(msg)
-      RubyPtp::Message.new(parse: msg)
+      Message.new(parse: msg)
     end
 
     def parseEvent(msg, addr, rflags, cfg, ts)
@@ -127,7 +127,7 @@ module RubyPtp
       case message.type
 
       # In case of a SYNC
-      when RubyPtp::Message::SYNC
+      when Message::SYNC
         if @slave_state == :WAIT_FOR_SYNC
           if message.originTimestamp == -1
             @slave_state = :WAIT_FOR_FOLLOW_UP
@@ -155,7 +155,7 @@ module RubyPtp
         # bob...
 
       # In case of a FOLLOW_UP
-      when RubyPtp::Message::FOLLOW_UP
+      when Message::FOLLOW_UP
         if @slave_state == :WAIT_FOR_FOLLOW_UP
           recordTimestamps(t1: timeArrToBigDec(*message.originTimestamp))
           t3 = sendDelayReq()
@@ -163,7 +163,7 @@ module RubyPtp
           @slave_state = :WAIT_FOR_DELAY_RESP
         end
       # In case of a DELAY_RESP
-      when RubyPtp::Message::DELAY_RESP
+      when Message::DELAY_RESP
         if @slave_state == :WAIT_FOR_DELAY_RESP
           recordTimestamps(t4: message.originTimestamp)
           updateTime()
