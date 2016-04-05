@@ -131,7 +131,7 @@ module RubyPtp
         if @slave_state == :WAIT_FOR_SYNC
           if message.originTimestamp == -1
             @slave_state = :WAIT_FOR_FOLLOW_UP
-            recordTimestamps(t2: ts)
+            recordTimestamps(t2: timeArrToBigDec(*ts))
           else
             t1 = timeArrToBigDec(*message.originTimestamp)
             t2 = timeArrToBigDec(*ts)
@@ -165,7 +165,7 @@ module RubyPtp
       # In case of a DELAY_RESP
       when Message::DELAY_RESP
         if @slave_state == :WAIT_FOR_DELAY_RESP
-          recordTimestamps(t4: message.originTimestamp)
+          recordTimestamps(t4: timeArrToBigDec(*message.receiveTimestamp))
           updateTime()
           @slave_state = :WAIT_FOR_SYNC
         end
@@ -190,14 +190,12 @@ module RubyPtp
       @timestamps.shift
       @timestamps << @activestamps
 
+      t1, t2, t3, t4 = @activestamps
+
       # Calculate link delay
-      @delay << (
-        (@activestamps[1] - @activestamps[0]) +
-        (@activestamps[3] - @activestamps[2])) / 2
+      @delay << ((t2 - t1) + (t4 - t3)) / 2
       # Calculate phase error
-      @phase_error << (
-        (@activestamps[1] - @activestamps[0]) -
-        (@activestamps[3] - @activestamps[2])) / 2
+      @phase_error << ((t2 - t1) - (t4 - t3)) / 2
 
       # Calculate frequency error
       if @timestamps[-2]
@@ -209,6 +207,9 @@ module RubyPtp
       end
 
       # TODO: Update system
+      puts @delay.last
+      puts @phase_error.last
+      puts @freq_error.last
 
       # Final cleanup
       @activestamps.fill(nil,0,4)
