@@ -47,7 +47,8 @@ module RubyPtp
       @timestamps    = [].fill(nil, 0, @savestamps)
       @delay         = []
       @phase_error   = []
-      @phase_error   = []
+      @freq_error    = []
+      @sync_id       = -1
       @activestamps  = [].fill(nil, 0, 4)
 
       # Create event socket
@@ -121,7 +122,7 @@ module RubyPtp
 
     def parseEvent(msg, addr, rflags, cfg, ts)
       message = getMessage(msg)
-      puts message.inspect
+      #puts message.inspect
 
       # Figure out what to do with the packages
       case message.type
@@ -130,8 +131,23 @@ module RubyPtp
       when Message::SYNC
         if @slave_state == :WAIT_FOR_SYNC
           if message.originTimestamp == -1
-            @slave_state = :WAIT_FOR_FOLLOW_UP
+
+            # In case the follow_up arrives first we need to deal with changing
+            # the order in which we are working. When the sequence ID is
+            # already up to date, we'll go straight to delay_req as we should
+            # already have t1 recorded somewhere.
             recordTimestamps(t2: timeArrToBigDec(*ts))
+            if @sync_id < message.sequenceId
+              @slave_state = :WAIT_FOR_FOLLOW_UP
+            elsif @sync_id == message.sequenceId
+              t3 = sendDelayReq()
+              recordTimestamps(t3: timeArrToBigDec(*t3))
+              @slave_state = :WAIT_FOR_DELAY_RESP
+            else
+              #log.warn("SYNC sequence ID is smaller than last one..")
+            end
+            @sync_id = message.sequenceId
+
           else
             t1 = timeArrToBigDec(*message.originTimestamp)
             t2 = timeArrToBigDec(*ts)
@@ -143,12 +159,12 @@ module RubyPtp
         end
       end
 
-      puts @slave_state
+      #puts @slave_state
     end
 
     def parseGeneral(msg, addr, rflags, cfg)
       message = getMessage(msg)
-      puts message.inspect
+      #puts message.inspect
 
       case message.type
       when Message::ANNOUNCE
@@ -156,11 +172,14 @@ module RubyPtp
 
       # In case of a FOLLOW_UP
       when Message::FOLLOW_UP
-        if @slave_state == :WAIT_FOR_FOLLOW_UP
+        if @slave_state == :WAIT_FOR_FOLLOW_UP || @sync_id < message.sequenceId
           recordTimestamps(t1: timeArrToBigDec(*message.originTimestamp))
-          t3 = sendDelayReq()
-          recordTimestamps(t3: timeArrToBigDec(*t3))
-          @slave_state = :WAIT_FOR_DELAY_RESP
+          @slave_state = :WAIT_FOR_SYNC
+          unless @sync_id < message.sequenceId
+            t3 = sendDelayReq()
+            recordTimestamps(t3: timeArrToBigDec(*t3))
+            @slave_state = :WAIT_FOR_DELAY_RESP
+          end
         end
       # In case of a DELAY_RESP
       when Message::DELAY_RESP
@@ -171,7 +190,7 @@ module RubyPtp
         end
       end
 
-      puts @slave_state
+      #puts @slave_state
     end
 
     # Update whatever timestamps are being thrown at us
@@ -191,6 +210,10 @@ module RubyPtp
       @timestamps << @activestamps
 
       t1, t2, t3, t4 = @activestamps
+      #puts "t1: #{t1.to_f}, "\
+      # "t2: #{t2.to_f}, "\
+      # "t3: #{t3.to_f}, "\
+      # "t4: #{t4.to_f}"
 
       # Calculate link delay
       @delay << ((t2 - t1) + (t4 - t3)) / 2
@@ -202,14 +225,14 @@ module RubyPtp
         old = @timestamps[-2]
         old_delay = @delay[-2]
         @freq_error << ((@activestamps[0] - old[0]) / (
-                      (@activestamps[1] + delay) -
+                       (@activestamps[1] + delay.last) -
                       (old[1] + old_delay)))
       end
 
       # TODO: Update system
-      puts @delay.last
-      puts @phase_error.last
-      puts @freq_error.last
+      puts "Delay: #{@delay.last.to_f}, " \
+        "phase_err: #{@phase_error.last.to_f}, "\
+        "freq_err: #{@freq_error.last.to_f if @freq_error}"
 
       # Final cleanup
       @activestamps.fill(nil,0,4)
@@ -218,7 +241,7 @@ module RubyPtp
     def timeArrToBigDec(sec, nsec)
       time  = BigDecimal.new(sec, 9 + sec.floor.to_s.length)
       timen = BigDecimal.new(nsec,9 + sec.floor.to_s.length)
-      timen = timen.div(1e9)
+      timen = timen.mult(BigDecimal.new(1e-9, 16), 10)
       time + timen
     end
 
