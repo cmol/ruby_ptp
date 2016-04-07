@@ -68,7 +68,7 @@ module RubyPtp
       when PDELAY_RESP
         raise NotImplementedError.new("PDELAY_RESP")
       when DELAY_RESP
-        sec1, sec2, nsec, rpi1, rpi2 = payload.unpack("LSLQS")
+        sec1, sec2, nsec, rpi1, rpi2 = payload.unpack("L>S>L>Q>S>")
         sec = (sec1 << 16) | sec2
         rpi = (rpi1 << 32) | rpi2
 
@@ -79,7 +79,7 @@ module RubyPtp
         raise NotImplementedError.new("PDELAY_RESP_FOLLOW_UP")
       when ANNOUNCE
         #raise NotImplementedError.new("ANNOUNCE")
-        puts "Announce...."
+        #puts "Announce...."
       when SIGNALING
         raise NotImplementedError.new("SIGNALING")
       when MANAGEMENT
