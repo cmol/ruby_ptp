@@ -31,7 +31,7 @@ module RubyPtp
       # Create a logger and set log level
       @log = Logger.new $stdout
       @log.progname = "RubyPTP"
-      @log.level = options[:loglevel] || Logger::WARN
+      @log.level = options[:loglevel] || Logger::INFO
 
       # Get IP and MAC of interface
       @ipaddr = getIP(options[:interface])
@@ -76,6 +76,7 @@ module RubyPtp
 
     def startPtp options = {}
       Thread.abort_on_exception = true
+      @log.debug "Starting general thread"
       general = Thread.new do
         while @state == STATES[:SLAVE] do
           msg, addr, rflags, *cfg = @general_socket.recvmsg
@@ -84,6 +85,7 @@ module RubyPtp
         @general_socket.close
       end
 
+      @log.debug "Starting event thread"
       event = Thread.new do
         while @state == STATES[:SLAVE] do
           msg, addr, rflags, *cfg = @event_socket.recvmsg
@@ -130,7 +132,7 @@ module RubyPtp
 
     def parseEvent(msg, addr, rflags, cfg, ts)
       message = getMessage(msg)
-      #puts message.inspect
+      @log.debug message.inspect
 
       # Figure out what to do with the packages
       case message.type
@@ -167,12 +169,12 @@ module RubyPtp
         end
       end
 
-      #puts @slave_state
+      @log.debug @slave_state
     end
 
     def parseGeneral(msg, addr, rflags, cfg)
       message = getMessage(msg)
-      #puts message.inspect
+      @log.debug message.inspect
 
       case message.type
       when Message::ANNOUNCE
@@ -198,7 +200,7 @@ module RubyPtp
         end
       end
 
-      #puts @slave_state
+      @log.debug @slave_state
     end
 
     # Update whatever timestamps are being thrown at us
@@ -218,10 +220,10 @@ module RubyPtp
       @timestamps << @activestamps
 
       t1, t2, t3, t4 = @activestamps
-      #puts "t1: #{t1.to_f}, "\
-      # "t2: #{t2.to_f}, "\
-      # "t3: #{t3.to_f}, "\
-      # "t4: #{t4.to_f}"
+      @log.debug "t1: #{t1.to_f}, "\
+       "t2: #{t2.to_f}, "\
+       "t3: #{t3.to_f}, "\
+       "t4: #{t4.to_f}"
 
       # Calculate link delay
       @delay << ((t2 - t1) + (t4 - t3)) / 2
@@ -238,7 +240,7 @@ module RubyPtp
       end
 
       # TODO: Update system
-      puts "Delay: #{@delay.last.to_f}, " \
+      @log.info "Delay: #{@delay.last.to_f}, " \
         "phase_err: #{@phase_error.last.to_f}, "\
         "freq_err: #{@freq_error.last.to_f if @freq_error}"
 
@@ -255,6 +257,7 @@ module RubyPtp
           unless adjoffset(-1,0) && adjoffset(0,1_000_000_000 + parts[1])
             # TODO: Handle this case
             # Bad things happen for unknown reasons :(
+            @log.error "Unable to adjust time offset"
           end
         end
       end
@@ -276,6 +279,7 @@ module RubyPtp
     def getMAC(interface)
       cmd = `ifconfig #{interface}`
       mac = cmd.match(/(([A-F0-9]{2}:){5}[A-F0-9]{2})/i).captures
+      @log.debug "MAC of interface '#{interface}' is: #{mac.first}"
       return mac.first
     end
 
@@ -283,6 +287,7 @@ module RubyPtp
     def getIP(interface)
       cmd = `ip addr show #{interface}`
       ip = cmd.match(/inet ((\d{1,3}\.){3}\d{1,3})\/\d{1,2}/).captures
+      @log.debug "IP of interface '#{interface}' is: #{ip.first}"
       return ip.first
     end
 
