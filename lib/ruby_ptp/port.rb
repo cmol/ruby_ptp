@@ -3,6 +3,7 @@ require 'inline'
 require 'ipaddr'
 require 'thread'
 require 'bigdecimal'
+require 'logger'
 
 module RubyPtp
 
@@ -27,6 +28,11 @@ module RubyPtp
               SLAVE:        0x09}
 
     def initialize options = {}
+      # Create a logger and set log level
+      @log = Logger.new $stdout
+      @log.progname = "RubyPTP"
+      @log.level = options[:loglevel] || Logger::WARN
+
       # Get IP and MAC of interface
       @ipaddr = getIP(options[:interface])
       @hwaddr = getMAC(options[:interface])
@@ -235,6 +241,23 @@ module RubyPtp
       puts "Delay: #{@delay.last.to_f}, " \
         "phase_err: #{@phase_error.last.to_f}, "\
         "freq_err: #{@freq_error.last.to_f if @freq_error}"
+
+      # Adjust phase
+      sign = @phase_error.last.to_f < 0 ? -1 : 1
+      parts = @phase_error.last.to_f.to_s.split(".").map{|p| p.to_i}
+      parts[1] = parts[1] * sign
+
+      # Sometimes setting the clock back fails so we need to handle the case
+      unless adjOffset(*parts)
+        # Most likely we have a small negative nsec offset and 0 sec offset
+        if parts[0] == 0 && parts[1] < 0
+          # Try another hacky way...
+          unless adjoffset(-1,0) && adjoffset(0,1_000_000_000 + parts[1])
+            # TODO: Handle this case
+            # Bad things happen for unknown reasons :(
+          end
+        end
+      end
 
       # Final cleanup
       @activestamps.fill(nil,0,4)
