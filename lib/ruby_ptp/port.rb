@@ -14,6 +14,7 @@ module RubyPtp
     EVENT_PORT         = 319
     GENERAL_PORT       = 320
     SIOCSHWTSTAMP      = 0x89b0
+    TAI_OFFSET         = 36 # TAI is 36 seconds in front of UTC
 
     STATES = {INITIALIZING: 0x01,
               FAULTY:       0x02,
@@ -84,7 +85,8 @@ module RubyPtp
           # TODO:Right now we'll just use SW TS to get things going and then do
           # something smarter when to protocol is working
           sw_ts = Time.now.utc
-          parseEvent(msg, addr, rflags, cfg, [sw_ts.to_i, sw_ts.usec])
+          parseEvent(msg, addr, rflags, cfg,
+                     [sw_ts.to_i + TAI_OFFSET, sw_ts.usec])
         end
         @event_socket.close
       end
@@ -238,6 +240,8 @@ module RubyPtp
       @activestamps.fill(nil,0,4)
     end
 
+    # Convert sec and nsec to a BigDecimal number for better than float
+    # precision when calculating times
     def timeArrToBigDec(sec, nsec)
       time  = BigDecimal.new(sec, 9 + sec.floor.to_s.length)
       timen = BigDecimal.new(nsec,9 + sec.floor.to_s.length)
@@ -245,18 +249,22 @@ module RubyPtp
       time + timen
     end
 
+    # Get the HW address of interface
     def getMAC(interface)
       cmd = `ifconfig #{interface}`
       mac = cmd.match(/(([A-F0-9]{2}:){5}[A-F0-9]{2})/i).captures
       return mac.first
     end
 
+    # Get IP address of interface
     def getIP(interface)
       cmd = `ip addr show #{interface}`
       ip = cmd.match(/inet ((\d{1,3}\.){3}\d{1,3})\/\d{1,2}/).captures
       return ip.first
     end
 
+    # Construct a DELAY_REQ message, set parameters for ID and send while
+    # recording timestamp
     def sendDelayReq
       msg = Message.new
       msg.sourcePortIdentity = @portIdentity
@@ -264,7 +272,7 @@ module RubyPtp
       packet = msg.readyMessage(Message::DELAY_REQ, @sequenceId)
       @event_socket.send(packet, 0, PTP_MULTICAST_ADDR, EVENT_PORT)
       now = Time.now.utc
-      return [now.to_i, now.usec]
+      return [now.to_i + TAI_OFFSET, now.usec]
     end
   end
 end
