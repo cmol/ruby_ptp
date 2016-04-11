@@ -254,7 +254,7 @@ module RubyPtp
         # Most likely we have a small negative nsec offset and 0 sec offset
         if parts[0] == 0 && parts[1] < 0
           # Try another hacky way...
-          unless adjoffset(-1,0) && adjoffset(0,1_000_000_000 + parts[1])
+          unless adjOffset(-1,0) && adjOffset(0,1_000_000_000 + parts[1])
             # TODO: Handle this case
             # Bad things happen for unknown reasons :(
             @log.error "Unable to adjust time offset"
@@ -301,6 +301,11 @@ module RubyPtp
       @event_socket.send(packet, 0, PTP_MULTICAST_ADDR, EVENT_PORT)
       now = Time.now.utc
       return [now.to_i + TAI_OFFSET, now.usec]
+    end
+
+    # Adjust system time
+    def adjOffset(sec,nsec)
+      ChangeTime.new.phase(sec,nsec)
     end
   end
 end
