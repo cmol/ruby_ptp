@@ -15,7 +15,7 @@ module RubyPtp
     EVENT_PORT         = 319
     GENERAL_PORT       = 320
     SIOCSHWTSTAMP      = 0x89b0
-    TAI_OFFSET         = 36 # TAI is 36 seconds in front of UTC
+    TAI_OFFSET         = 0 # TAI is 36 seconds in front of UTC
 
     STATES = {INITIALIZING: 0x01,
               FAULTY:       0x02,
@@ -69,6 +69,9 @@ module RubyPtp
       @general_socket.setsockopt(Socket::IPPROTO_IP,
                                  Socket::IP_ADD_MEMBERSHIP, ip)
       @general_socket.bind(Socket::INADDR_ANY, GENERAL_PORT)
+
+      # Clear settings on clock
+      ChangeTime.new.clear()
 
       # We are only running in slave mode
       @state = STATES[:SLAVE]
@@ -305,7 +308,10 @@ module RubyPtp
 
     # Adjust system time
     def adjOffset(sec,nsec)
-      ChangeTime.new.phase(sec,nsec)
+      @log.debug "Adjusting time #{sec} sec and #{nsec} nsec"
+      ret = ChangeTime.new.phase(sec,nsec)
+      puts ret
+      return ret < 0 ? false : true
     end
   end
 end
