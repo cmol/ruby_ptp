@@ -27,6 +27,7 @@ module RubyPtp
               UNCALIBRATED: 0x08,
               SLAVE:        0x09}
 
+
     def initialize options = {}
       # Create a logger and set log level
       @log = Logger.new $stdout
@@ -95,12 +96,21 @@ module RubyPtp
 
           # TODO:Right now we'll just use SW TS to get things going and then do
           # something smarter when to protocol is working
-          sw_ts = Time.now.utc
-          parseEvent(msg, addr, rflags, cfg,
-                     [sw_ts.to_i + TAI_OFFSET, sw_ts.usec])
+          #sw_ts = Time.now.utc
+          sw_ts = clock_gettime
+          parseEvent(msg, addr, rflags, cfg, [sw_ts[0] + TAI_OFFSET, sw_ts[1]])
         end
         @event_socket.close
       end
+
+      Signal.trap("INT") { 
+        @state = STATES[:DISABLED]
+        i=0
+        @delay.each do |d|
+          print "(#{i},#{d.to_f})"
+          i += 1
+        end
+      }
 
       general.join
       event.join
@@ -249,7 +259,7 @@ module RubyPtp
 
       # Adjust phase
       sign = @phase_error.last.to_f < 0 ? -1 : 1
-      parts = @phase_error.last.to_f.to_s.split(".").map{|p| p.to_i}
+      parts = @phase_error.last.to_f.round(9).to_s.split(".").map{|p| p.to_i}
       parts[1] = parts[1] * sign
 
       # Sometimes setting the clock back fails so we need to handle the case
@@ -302,17 +312,33 @@ module RubyPtp
       @sequenceId = (@sequenceId + 1) % 0xffff
       packet = msg.readyMessage(Message::DELAY_REQ, @sequenceId)
       @event_socket.send(packet, 0, PTP_MULTICAST_ADDR, EVENT_PORT)
-      now = Time.now.utc
-      return [now.to_i + TAI_OFFSET, now.usec]
+      now = clock_gettime
+      return [now[0] + TAI_OFFSET, now[1]]
+    end
+
+    # Get system time via c
+    def clock_gettime
+      #now = Time.now.utc
+      #[now.to_i, now.usec]
+
+      #ChangeTime.new.get().to_s.split(".").map!(&:to_i)
+
+      #t = [0,0].normalize!
+      t = [0,0]
+      ChangeTime.new.gett(t)
+      t
+      #t = ChangeTime.new.get()
+      #sec, nsec = t.unpack("qq")
+      #timeArrToBigDec(sec,nsec)
     end
 
     # Adjust system time
     def adjOffset(sec,nsec)
-      @log.debug "Adjusting time #{sec} sec and #{nsec} nsec"
+      @log.info "Adjusting time #{sec} sec and #{nsec} nsec"
       ret = ChangeTime.new.phase(sec,nsec)
-      puts ret
       return ret < 0 ? false : true
     end
+
   end
 end
 

@@ -33,19 +33,20 @@ int phase(long sec, long nsec) {
       // Ready for time change
       tx.modes = ADJ_SETOFFSET | ADJ_NANO;
 
-      struct timespec t;
-      t.tv_sec  = sec;
-      t.tv_nsec = nsec;
-
-      tx.time.tv_sec  = t.tv_sec;
-      tx.time.tv_usec = t.tv_nsec;
+      tx.time.tv_sec  = sec;
+      tx.time.tv_usec = nsec;
+      /*if(tx.time.tv_usec < 0) {
+        tx.time.tv_sec  -= 1;
+        tx.time.tv_usec += 1000000000;
+      }*/
       tx.status = tx.status & 0xffbf;
 
       ret = adjtimex(&tx);
+      //ret = clock_adjtime(CLOCK_REALTIME,&tx);
 
-      if(ret < 0) {
-        printf("%s\n", strerror(errno));
-      }
+      //if(ret < 0) {
+      //  printf("%s\n", strerror(errno));
+      //}
 
       printf("%d\n", tx.status);
 
@@ -59,20 +60,47 @@ void clear() {
       tx.modes = ADJ_STATUS;
       tx.status = STA_PLL;
       ret = adjtimex(&tx);
-      if(ret < 0) {
+      /*if(ret < 0) {
         printf("%s\n", strerror(errno));
       } else {
         printf("%d\n", ret);
-      }
+      }*/
       tx.modes = ADJ_STATUS;
       tx.status = 0;
       ret = adjtimex(&tx);
-      if(ret < 0) {
+      /*if(ret < 0) {
         printf("%s\n", strerror(errno));
       } else {
         printf("%d\n", ret);
-      }
+      }*/
 }'
+
+    builder.c '
+double get() { 
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME, &now);
+  //time(&now);
+  double sec, nsec;
+  sec  = (double) now.tv_sec;
+  nsec = (double) now.tv_nsec;
+  sec  = sec + (nsec / 1000000000.0);
+  printf("%f\n",nsec);
+  printf("%f\n",nsec / 1000000000.0);
+  return sec;
+}'
+
+    builder.c <<-'SRC'
+     static VALUE gett(VALUE arr) {
+        struct timespec now;
+        clock_gettime(CLOCK_REALTIME, &now);
+
+        VALUE* array = RARRAY_PTR(arr);
+        array[0] = INT2NUM(now.tv_sec);
+        array[1] = INT2NUM(now.tv_nsec);
+
+        return arr;
+    }
+    SRC
 
     end
   end
