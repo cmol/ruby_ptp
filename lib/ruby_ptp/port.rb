@@ -176,7 +176,7 @@ module RubyPtp
               recordTimestamps(t3: timeArrToBigDec(*t3))
               @slave_state = :WAIT_FOR_DELAY_RESP
             else
-              #log.warn("SYNC sequence ID is smaller than last one..")
+              @log.warn("SYNC sequence ID is smaller than last one..")
             end
             @sync_id = message.sequenceId
 
