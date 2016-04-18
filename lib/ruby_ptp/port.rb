@@ -156,6 +156,8 @@ module RubyPtp
       message = getMessage(msg)
       @log.debug message.inspect
 
+      hw_ts, sw_ts = getTimestamps(cfg)
+
       # Figure out what to do with the packages
       case message.type
 
@@ -311,6 +313,25 @@ module RubyPtp
       ip = cmd.match(/inet ((\d{1,3}\.){3}\d{1,3})\/\d{1,2}/).captures
       @log.debug "IP of interface '#{interface}' is: #{ip.first}"
       return ip.first
+    end
+
+    # Extract software and hardware timestamps from the ancillary data.
+    # The reason for these being little endian and not network byte order, I
+    # don't really get, but it works.
+    def getTimestamps(cfg)
+      hw_ts = nil
+      sw_ts = nil
+      cfg.each do |c|
+        # Here, the first two 64-bit fields are sw stamps, two are not used,
+        # and the last two contains the hw stamp we are looking for.
+        if c.cmsg_is?(:SOCKET, Socket::SO_TIMESTAMPING)
+          hw_ts = c.data.unpack("q*")[4..5]
+        elsif c.cmsg_is?(:SOCKET, Socket::SO_TIMESTAMPNS)
+          sw_ts = c.data.unpack("qq")
+        end
+
+        return sw_ts,hw_ts
+      end
     end
 
     # Construct a DELAY_REQ message, set parameters for ID and send while
