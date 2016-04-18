@@ -128,11 +128,12 @@ module RubyPtp
       # If we are trying to do HW stamps, we need to initialise the network
       # interface to actually make the timestamps.
       if @ts_mode == :TIMESTAMPHW
-        hwstamp_config = [0,1,5].pack("iii")
 
-        # Yes, this is very crude, but it works....
-        ifreq ="#{interface}\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
-          [hwstamp_config].pack("P")
+        # Construct the command for the network interface in a slightly crude
+        # way according to:
+        # https://www.kernel.org/doc/Documentation/networking/timestamping.txt
+        hwstamp_config = [0,1,5].pack("iii")
+        ifreq = interface.ljust(16,"\x00") + [hwstamp_config].pack("P")
         # Make sure things worked
         if socket.ioctl(SIOCSHWTSTAMP, ifreq) != 0
           @log.error "Unable to initialise HW stamping"
