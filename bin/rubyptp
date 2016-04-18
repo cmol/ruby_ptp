@@ -3,6 +3,7 @@
 require "bundler/setup"
 require "ruby_ptp"
 require 'logger'
+require 'slop'
 
 # You can add fixtures and/or initialization code here to make experimenting
 # with your gem easier. You can also use a different console, if you like.
@@ -11,8 +12,37 @@ require 'logger'
 # require "pry"
 # Pry.start
 
+opts = Slop.parse do |o|
+  o.bool '-h', '--help', 'print this help message'
+  o.string '-i', '--interface', 'listen interface'
+  o.bool '-s', '--software', 'get timestamps using software, else hardware'
+  o.bool '-v', '--verbose', 'enable verbose mode'
+  o.bool '-q', '--quiet', 'suppress output (quiet mode)'
+  o.on '--version', 'print the version' do
+    puts RubyPtp::VERSION
+    exit
+  end
+end
 
-port = RubyPtp::Port.new(interface: "eth0", ts_mode: "software", loglevel: Logger::INFO )
+if opts.help?
+  puts opts
+  exit 0
+end
+
+unless opts[:interface]
+  puts opts.to_h
+  puts "Missing argument interface"
+  puts opts
+  exit 1
+end
+
+oph = opts.to_h
+oph[:loglevel] = opts.verbose? ? Logger::DEBUG : Logger::INFO
+oph[:ts_mode] = opts.software? ? :TIMESTAMPSW : :TIMESTAMPHW
+
+
+port = RubyPtp::Port.new(oph)
+#port = RubyPtp::Port.new(interface: "eth0", ts_mode: "software", loglevel: Logger::INFO )
 port.startPtp()
 
 #sync = "\x00\x01\x00\x01_DFLT\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x01\x00\x01\x02\x03\x04\x05\x00\x01\x007\x00\x00\x00\b\x00\x00\x00\x00I\x05\xCD\x01)\xB1\x8D\xB0\x00\x00\x00\x00\x00\x01\x00\x01\x02\x03\x04\x05\x00\x00\x007\x00\x00\x00\x04DFLT\x00\x00\xF0`\x00\x01\x00\x00\x00\x00\x00\x01\x00\x00\xF0`\x00\x00\x00\x00\x00\x00\x00\x04DFLT\x00\x01\x00\x01\x02\x03\x04\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
