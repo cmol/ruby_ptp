@@ -121,21 +121,29 @@ module RubyPtp
 
     # Either setup socket in HW or SW timestamping mode
     def setupEventSocket(interface)
-      if @ts_mode == :TIMESTAMPHW
-        raise NotImplementedError.new("HW TIMESTAMPS")
+      socket = UDPSocket.new
+      ip = IPAddr.new(PTP_MULTICAST_ADDR).hton + IPAddr.new("0.0.0.0").hton
+      socket.setsockopt(Socket::IPPROTO_IP, Socket::IP_ADD_MEMBERSHIP, ip)
 
-      else
-        #socket = Socket.new(Socket::AF_INET, Socket::SOCK_DGRAM, 0)
-        #socket.setsockopt(:SOCKET,
-        #                  Socket::IP_MULTICAST_IF, IPAddr.new(@ipaddr).hton)
-        socket = UDPSocket.new
-        socket.setsockopt(:SOCKET, :TIMESTAMPNS, true)
-        ip = IPAddr.new(PTP_MULTICAST_ADDR).hton + IPAddr.new("0.0.0.0").hton
-        socket.setsockopt(Socket::IPPROTO_IP, Socket::IP_ADD_MEMBERSHIP, ip)
-        socket.bind(Socket::INADDR_ANY, EVENT_PORT)
+      # If we are trying to do HW stamps, we need to initialise the network
+      # interface to actually make the timestamps.
+      if @ts_mode == :TIMESTAMPHW
+        hwstamp_config = [0,1,5].pack("iii")
+
+        # Yes, this is very crude, but it works....
+        ifreq ="#{interface}\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
+          [hwstamp_config].pack("P")
+        # Make sure things worked
+        if socket.ioctl(SIOCSHWTSTAMP, ifreq) != 0
+          @log.error "Unable to initialise HW stamping"
+        end
+        socket.setsockopt(:SOCKET, Socket::SO_TIMESTAMPING, 69)
       end
 
-      #socket.bind(Addrinfo.udp(@ipaddr, EVENT_PORT))
+      # Enable the software timestamps for comparison
+      socket.setsockopt(:SOCKET, :TIMESTAMPNS, true)
+      socket.bind(Socket::INADDR_ANY, EVENT_PORT)
+
       return socket
     end
 
@@ -312,6 +320,7 @@ module RubyPtp
       @sequenceId = (@sequenceId + 1) % 0xffff
       packet = msg.readyMessage(Message::DELAY_REQ, @sequenceId)
       @event_socket.send(packet, 0, PTP_MULTICAST_ADDR, EVENT_PORT)
+
       now = clock_gettime
       return [now[0] + TAI_OFFSET, now[1]]
     end
