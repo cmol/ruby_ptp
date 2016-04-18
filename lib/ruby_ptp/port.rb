@@ -101,7 +101,7 @@ module RubyPtp
         @event_socket.close
       end
 
-      Signal.trap("INT") { 
+      Signal.trap("INT") {
         @state = STATES[:DISABLED]
         puts "Trying gracefull shutdown (2sec)"
         sleep(2)
@@ -387,18 +387,9 @@ module RubyPtp
 
     # Get system time via c
     def clock_gettime
-      #now = Time.now.utc
-      #[now.to_i, now.usec]
-
-      #ChangeTime.new.get().to_s.split(".").map!(&:to_i)
-
-      #t = [0,0].normalize!
       t = [0,0]
       ChangeTime.new.gett(t)
       t
-      #t = ChangeTime.new.get()
-      #sec, nsec = t.unpack("qq")
-      #timeArrToBigDec(sec,nsec)
     end
 
     # Adjust system time
@@ -410,5 +401,4 @@ module RubyPtp
 
   end
 end
-
 
