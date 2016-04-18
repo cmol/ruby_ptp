@@ -4,6 +4,13 @@ require "bundler/setup"
 require "ruby_ptp"
 require 'logger'
 require 'slop'
+require 'rbconfig'
+
+# Start by checking OS as Linux is only supported right now
+unless RbConfig::CONFIG['host_os'].match(/linux/)
+  puts "FATAL: Sorry, but right now only linux are supported :-("
+  exit 1
+end
 
 # You can add fixtures and/or initialization code here to make experimenting
 # with your gem easier. You can also use a different console, if you like.
@@ -30,7 +37,6 @@ if opts.help?
 end
 
 unless opts[:interface]
-  puts opts.to_h
   puts "Missing argument interface"
   puts opts
   exit 1
