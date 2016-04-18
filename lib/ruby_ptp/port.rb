@@ -94,9 +94,7 @@ module RubyPtp
         while @state == STATES[:SLAVE] do
           msg, addr, rflags, *cfg = @event_socket.recvmsg
 
-          # TODO:Right now we'll just use SW TS to get things going and then do
-          # something smarter when to protocol is working
-          #sw_ts = Time.now.utc
+          # Use the timestamps from the system, just in case we need it
           sw_ts = clock_gettime
           parseEvent(msg, addr, rflags, cfg, [sw_ts[0] + TAI_OFFSET, sw_ts[1]])
         end
@@ -105,6 +103,10 @@ module RubyPtp
 
       Signal.trap("INT") { 
         @state = STATES[:DISABLED]
+        puts "Trying gracefull shutdown (2sec)"
+        sleep(2)
+        event.terminate unless @event_socket.closed?
+        general.terminate unless @general_socket.closed?
         i=0
         @delay.each do |d|
           print "(#{i},#{d.to_f})"
@@ -152,11 +154,25 @@ module RubyPtp
       Message.new(parse: msg)
     end
 
-    def parseEvent(msg, addr, rflags, cfg, ts)
+    def parseEvent(msg, addr, rflags, cfg, now)
       message = getMessage(msg)
       @log.debug message.inspect
 
+      # Get timestamps from socket
       hw_ts, sw_ts = getTimestamps(cfg)
+
+      # Firstly try the TIMESTAMPNS
+      now = sw_ts if sw_ts
+
+      # Try to get hardware timestamps if we have them
+      if @ts_mode == :TIMESTAMPHW
+        if hw_ts == nil
+          @log.error "No hardware timestamps available after Delay_Req." \
+            "Using software"
+        else
+          now = hw_ts
+        end
+      end
 
       # Figure out what to do with the packages
       case message.type
@@ -170,7 +186,7 @@ module RubyPtp
             # the order in which we are working. When the sequence ID is
             # already up to date, we'll go straight to delay_req as we should
             # already have t1 recorded somewhere.
-            recordTimestamps(t2: timeArrToBigDec(*ts))
+            recordTimestamps(t2: timeArrToBigDec(*now))
             if @sync_id < message.sequenceId
               @slave_state = :WAIT_FOR_FOLLOW_UP
             elsif @sync_id == message.sequenceId
@@ -184,7 +200,7 @@ module RubyPtp
 
           else
             t1 = timeArrToBigDec(*message.originTimestamp)
-            t2 = timeArrToBigDec(*ts)
+            t2 = timeArrToBigDec(*now)
             recordTimestamps(t1: t1, t2: t2)
             t3 = sendDelayReq()
             recordTimestamps(t3: timeArrToBigDec(*t3))
@@ -344,6 +360,28 @@ module RubyPtp
       @event_socket.send(packet, 0, PTP_MULTICAST_ADDR, EVENT_PORT)
 
       now = clock_gettime
+
+      # Get timestaps from hardware
+      msg, addr, rflags, *cfg = @event_socket.recvmsg(256,
+                                               Socket::MSG_ERRQUEUE,
+                                               512, :scm_rights=>true)
+      msg = addr = rflags = nil
+      sw_ts, hw_ts = getTimestamps(cfg)
+
+      # Firstly try the TIMESTAMPNS
+      now = sw_ts if sw_ts
+
+      # Try to get hardware timestamps if we have them
+      if @ts_mode == :TIMESTAMPHW
+        if hw_ts == nil
+          @log.error "No hardware timestamps available after Delay_Req." \
+            "Using software"
+        else
+          now = hw_ts
+        end
+      end
+
+
       return [now[0] + TAI_OFFSET, now[1]]
     end
 
