@@ -46,6 +46,7 @@ module RubyPtp
       @state = STATES[:INITIALIZING]
       @slave_state = :WAIT_FOR_SYNC
       @sequenceId = 1
+      @announce_counter = 0
 
       # Set mode of timestamps
       @ts_mode = options[:ts_mode]
@@ -96,22 +97,38 @@ module RubyPtp
 
           # Use the timestamps from the system, just in case we need it
           sw_ts = clock_gettime
-          parseEvent(msg, addr, rflags, cfg, [sw_ts[0] + TAI_OFFSET, sw_ts[1]])
+          parseEvent(msg, addr, rflags, cfg, sw_ts)
         end
         @event_socket.close
       end
 
       Signal.trap("INT") {
         @state = STATES[:DISABLED]
+        puts "Logging delay:"
+        i=0
+        @delay.each do |d|
+          print "(#{i},#{(d * 1_000_000_000).to_f})"
+          i += 1
+        end
+        print "\n"
+        puts "Logging offset:"
+        i=0
+        @phase_error.each do |d|
+          print "(#{i},#{(d * 1_000_000_000).to_f})"
+          i += 1
+        end
+        print "\n"
+        puts "Logging frequency_error:"
+        i=0
+        @freq_error.each do |d|
+          print "(#{i},#{d.to_f})"
+          i += 1
+        end
+        print "\n"
         puts "Trying gracefull shutdown (2sec)"
         sleep(2)
         event.terminate unless @event_socket.closed?
         general.terminate unless @general_socket.closed?
-        i=0
-        @delay.each do |d|
-          print "(#{i},#{d.to_f})"
-          i += 1
-        end
       }
 
       general.join
@@ -141,6 +158,7 @@ module RubyPtp
           @log.error "Unable to initialise HW stamping"
         end
         socket.setsockopt(:SOCKET, Socket::SO_TIMESTAMPING, 69)
+        #socket.setsockopt(Socket::IPPROTO_IP, Socket::IP_MULTICAST_LOOP, true)
       end
 
       # Enable the software timestamps for comparison
@@ -167,12 +185,13 @@ module RubyPtp
       # Try to get hardware timestamps if we have them
       if @ts_mode == :TIMESTAMPHW
         if hw_ts == nil
-          @log.error "No hardware timestamps available after Delay_Req." \
+          @log.error "No hardware timestamps in recived SYNC. " \
             "Using software"
         else
           now = hw_ts
         end
       end
+       now = [now[0] + TAI_OFFSET, now[1]]
 
       # Figure out what to do with the packages
       case message.type
@@ -219,10 +238,17 @@ module RubyPtp
       case message.type
       when Message::ANNOUNCE
         # bob...
+        @announce_counter += 1
+        if @announce_counter > 2 && @slave_state == :WAIT_FOR_DELAY_RESP
+          @log.debug "We might be stuck, start over with sync"
+          @slave_state = :WAIT_FOR_SYNC
+          @announce_counter = 0
+        end
 
       # In case of a FOLLOW_UP
       when Message::FOLLOW_UP
-        if @slave_state == :WAIT_FOR_FOLLOW_UP || @sync_id < message.sequenceId
+        if @slave_state == :WAIT_FOR_FOLLOW_UP ||
+           (@slave_state == :WAIT_FOR_SYNC && @sync_id < message.sequenceId)
           recordTimestamps(t1: timeArrToBigDec(*message.originTimestamp))
           @slave_state = :WAIT_FOR_SYNC
           unless @sync_id < message.sequenceId
@@ -266,17 +292,18 @@ module RubyPtp
        "t4: #{t4.to_f}"
 
       # Calculate link delay
-      @delay << ((t2 - t1) + (t4 - t3)) / 2
+      delay = ((t2 - t1) + (t4 - t3)) / 2
+      @delay << (delay.to_f > 0 ? delay : delay * -1)
       # Calculate phase error
       @phase_error << ((t2 - t1) - (t4 - t3)) / 2
 
       # Calculate frequency error
       if @timestamps[-2]
-        old = @timestamps[-2]
-        old_delay = @delay[-2]
-        @freq_error << ((@activestamps[0] - old[0]) / (
-                       (@activestamps[1] + delay.last) -
-                      (old[1] + old_delay)))
+        ot1 = @timestamps[-2][0].to_f
+        ot2 = @timestamps[-2][1].to_f
+        ode = @delay[-2].to_f
+        de  = @delay.last.to_f
+        @freq_error << (t1 - ot1) / ((t2 + de) - (ot2 + ode))
       end
 
       # TODO: Update system
@@ -346,8 +373,8 @@ module RubyPtp
           sw_ts = c.data.unpack("qq")
         end
 
-        return sw_ts,hw_ts
       end
+      return sw_ts,hw_ts
     end
 
     # Construct a DELAY_REQ message, set parameters for ID and send while
@@ -372,9 +399,9 @@ module RubyPtp
       now = sw_ts if sw_ts
 
       # Try to get hardware timestamps if we have them
-      if @ts_mode == :TIMESTAMPHW
+      if @ts_mode == :TIMESTAMPHW && false
         if hw_ts == nil
-          @log.error "No hardware timestamps available after Delay_Req." \
+          @log.error "No hardware timestamps available after Delay_Req. " \
             "Using software"
         else
           now = hw_ts
