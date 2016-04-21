@@ -292,10 +292,10 @@ module RubyPtp
        "t4: #{t4.to_f}"
 
       # Calculate link delay
-      delay = ((t2 - t1) + (t4 - t3)) / 2
+       delay = ((t2 - t1) + (t4 - t3)) / BigDecimal.new(2)
       @delay << (delay.to_f > 0 ? delay : delay * -1)
       # Calculate phase error
-      @phase_error << ((t2 - t1) - (t4 - t3)) / 2
+      @phase_error << ((t2 - t1) - (t4 - t3)) / BigDecimal.new(2)
 
       # Calculate frequency error
       if @timestamps[-2]
