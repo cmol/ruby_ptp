@@ -84,7 +84,6 @@ module RubyPtp
       @log.debug "Starting general thread"
       general = Thread.new do
         while @state == STATES[:SLAVE] do
-          puts "lol"
           msg, addr, rflags, *cfg = @general_socket.recvmsg
           parseGeneral(msg, addr, rflags, cfg)
         end
@@ -295,7 +294,7 @@ module RubyPtp
        "t4: #{t4.to_f}"
 
       # Calculate link delay
-       delay = ((t2 - t1) + (t4 - t3)) / BigDecimal.new(2)
+      delay = ((t2 - t1) + (t4 - t3)) / BigDecimal.new(2)
       @delay << (delay.to_f > 0 ? delay : delay * -1)
       # Calculate phase error
       @phase_error << ((t2 - t1) - (t4 - t3)) / BigDecimal.new(2)
@@ -427,7 +426,7 @@ module RubyPtp
       if nsec > 1000
         usec = sec * 1000000 + (nsec / 1000.0).round
         @log.info "Adjusting time #{usec} usec"
-        `adjtimex -o #{usec}`
+        `adjtimex -o -#{usec}`
         return true
       else
         @log.info "Adjusting time #{sec} sec and #{nsec} nsec"
