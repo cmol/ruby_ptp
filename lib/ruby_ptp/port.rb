@@ -84,6 +84,7 @@ module RubyPtp
       @log.debug "Starting general thread"
       general = Thread.new do
         while @state == STATES[:SLAVE] do
+          puts "lol"
           msg, addr, rflags, *cfg = @general_socket.recvmsg
           parseGeneral(msg, addr, rflags, cfg)
         end
@@ -198,7 +199,9 @@ module RubyPtp
 
       # In case of a SYNC
       when Message::SYNC
-        if @slave_state == :WAIT_FOR_SYNC
+        if @slave_state == :WAIT_FOR_SYNC ||
+            (message.sequenceId > @sync_id &&
+             @slave_state == :WAIT_FOR_FOLLOW_UP)
           if message.originTimestamp == -1
 
             # In case the follow_up arrives first we need to deal with changing
@@ -421,9 +424,16 @@ module RubyPtp
 
     # Adjust system time
     def adjOffset(sec,nsec)
-      @log.info "Adjusting time #{sec} sec and #{nsec} nsec"
-      ret = ChangeTime.new.phase(sec,nsec)
-      return ret < 0 ? false : true
+      if nsec > 1000
+        usec = sec * 1000000 + (nsec / 1000.0).round
+        @log.info "Adjusting time #{usec} usec"
+        `adjtimex -o #{usec}`
+        return true
+      else
+        @log.info "Adjusting time #{sec} sec and #{nsec} nsec"
+        ret = ChangeTime.new.phase(sec,nsec)
+        return ret < 0 ? false : true
+      end
     end
 
   end
