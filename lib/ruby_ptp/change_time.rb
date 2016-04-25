@@ -23,12 +23,8 @@ int phase(long sec, long nsec) {
 #ifndef ADJ_SETOFFSET
 #define ADJ_SETOFFSET 0x0100
 #endif
-      // Clear clock for updating
       struct timex tx;
       int ret;
-      //tx.modes = ADJ_STATUS;
-      //tx.status = STA_PLL;
-      //adjtimex(&tx);
 
       // Ready for time change
       tx.modes = ADJ_SETOFFSET | ADJ_NANO;
@@ -39,6 +35,7 @@ int phase(long sec, long nsec) {
         tx.time.tv_sec  -= 1;
         tx.time.tv_usec += 1000000000;
       }*/
+      // Try to clear a status
       tx.status = tx.status & 0xffbf;
 
       ret = adjtimex(&tx);
