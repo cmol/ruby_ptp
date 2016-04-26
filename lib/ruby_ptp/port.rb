@@ -340,7 +340,7 @@ module RubyPtp
     def timeArrToBigDec(sec, nsec)
       time  = BigDecimal.new(sec, 9 + sec.floor.to_s.length)
       timen = BigDecimal.new(nsec,9 + sec.floor.to_s.length)
-      timen = timen.mult(BigDecimal.new(1e-9, 16), 10)
+      timen = timen.mult(BigDecimal.new(1e-9, 16), 9)
       time + timen
     end
 
@@ -423,7 +423,7 @@ module RubyPtp
 
     # Adjust system time
     def adjOffset(sec,nsec)
-      if nsec > 1000
+      if nsec > 10000000000
         usec = sec * 1000000 + (nsec / 1000.0).round
         @log.info "Adjusting time #{usec} usec"
         `adjtimex -o -#{usec}`

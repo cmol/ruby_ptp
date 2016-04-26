@@ -29,7 +29,18 @@ int phase(long sec, long nsec) {
       // Ready for time change
       tx.modes = ADJ_SETOFFSET | ADJ_NANO;
 
-      tx.time.tv_sec  = sec;
+      // If the error is more than 50 usec, do something
+      // crude to get us close
+      if (nsec > 50000) {
+        struct timeval tv;
+        gettimeofday(&tv, 0);
+        tv.tv_sec -= sec;
+        tv.tv_usec += ((sec < 0) ? nsec : nsec * -1) / 1000;
+        settimeofday(&tv, 0);
+        return 0;
+      }
+
+      tx.time.tv_sec  = sec * -1;
       tx.time.tv_usec = nsec;
       /*if(tx.time.tv_usec < 0) {
         tx.time.tv_sec  -= 1;
@@ -41,9 +52,9 @@ int phase(long sec, long nsec) {
       ret = adjtimex(&tx);
       //ret = clock_adjtime(CLOCK_REALTIME,&tx);
 
-      //if(ret < 0) {
-      //  printf("%s\n", strerror(errno));
-      //}
+      if(ret < 0) {
+        printf("%s\n", strerror(errno));
+      }
 
       printf("%d\n", tx.status);
 
