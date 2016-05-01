@@ -16,7 +16,50 @@ module RubyPtp
       builder.include '<signal.h>'
       builder.include '<unistd.h>'
       builder.include '<errno.h>'
+      builder.include '<math.h>'
       builder.add_compile_flags("-std=c99", "-lrt")
+
+      builder.c '
+int phase_adj(double adj) {
+  #ifndef ADJ_SETOFFSET
+  #define ADJ_SETOFFSET 0x0100
+  #endif
+
+  struct timex tx;
+  int ret;
+
+  // Do coarse time adjustment
+  if (fabs(adj) > 0.00005) {
+    struct timeval tv;
+    int sec  = (int) adj;
+    int nsec = (int) ((adj - sec) * 1000000);
+    printf("%d\n",nsec);
+    gettimeofday(&tv, 0);
+    tv.tv_sec  -= sec;
+    tv.tv_usec -= nsec;
+    settimeofday(&tv, 0);
+    return 17;
+  }
+  else {
+    int sign = adj < 0 ? -1 : 1;
+    int sec  = 0;
+    int nsec = abs((int) (adj * 1000000000));
+
+    // Fix adjust if we are adjusting the other way
+    if (sign == 1) {
+      sec   = -1;
+      nsec += 1000000000;
+    }
+
+    tx.time.tv_sec =  sec;
+    tx.time.tv_usec = nsec;
+
+    tx.modes = ADJ_SETOFFSET | ADJ_NANO;
+    ret = adjtimex(&tx);
+
+    return ret;
+  }
+}'
 
       builder.c '
 int phase(long sec, long nsec) {

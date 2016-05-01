@@ -16,6 +16,7 @@ module RubyPtp
     GENERAL_PORT       = 320
     SIOCSHWTSTAMP      = 0x89b0
     TAI_OFFSET         = 0 # TAI is 36 seconds in front of UTC
+    ALPHA              = BigDecimal.new(0.75,9)
 
     STATES = {INITIALIZING: 0x01,
               FAULTY:       0x02,
@@ -56,7 +57,9 @@ module RubyPtp
       @timestamps    = [].fill(nil, 0, @savestamps)
       @delay         = []
       @phase_error   = []
+      @phase_err_avg = []
       @freq_error    = []
+      @freq_err_avg  = []
       @sync_id       = -1
       @activestamps  = [].fill(nil, 0, 4)
 
@@ -296,8 +299,15 @@ module RubyPtp
       # Calculate link delay
       delay = ((t2 - t1) + (t4 - t3)) / BigDecimal.new(2)
       @delay << (delay.to_f > 0 ? delay : delay * -1)
-      # Calculate phase error
+      # Calculate phase error and average phase_error
       @phase_error << ((t2 - t1) - (t4 - t3)) / BigDecimal.new(2)
+
+      # Calculate average if multiple data points exists
+      avg = @phase_error[-1]
+      if @phase_err_avg[-1]
+        avg = ALPHA * @phase_err_avg[-1] + (BigDecimal.new(1) - ALPHA) * @phase_error[-1]
+      end
+      @phase_err_avg << avg
 
       # Calculate frequency error
       if @timestamps[-2]
@@ -311,25 +321,11 @@ module RubyPtp
       # TODO: Update system
       @log.info "Delay: #{@delay.last.to_f}, " \
         "phase_err: #{@phase_error.last.to_f}, "\
+        "phase_err_avg: #{@phase_err_avg.last.to_f}, "\
         "freq_err: #{@freq_error.last.to_f if @freq_error}"
 
       # Adjust phase
-      sign = @phase_error.last.to_f < 0 ? -1 : 1
-      parts = @phase_error.last.to_f.round(9).to_s.split(".").map{|p| p.to_i}
-      parts[1] = parts[1] * sign
-
-      # Sometimes setting the clock back fails so we need to handle the case
-      unless adjOffset(*parts)
-        # Most likely we have a small negative nsec offset and 0 sec offset
-        if parts[0] == 0 && parts[1] < 0
-          # Try another hacky way...
-          unless adjOffset(-1,0) && adjOffset(0,1_000_000_000 + parts[1])
-            # TODO: Handle this case
-            # Bad things happen for unknown reasons :(
-            @log.error "Unable to adjust time offset"
-          end
-        end
-      end
+      adjOffset(@phase_err_avg.last.to_f)
 
       # Final cleanup
       @activestamps.fill(nil,0,4)
@@ -422,17 +418,10 @@ module RubyPtp
     end
 
     # Adjust system time
-    def adjOffset(sec,nsec)
-      if nsec > 10000000000
-        usec = sec * 1000000 + (nsec / 1000.0).round
-        @log.info "Adjusting time #{usec} usec"
-        `adjtimex -o -#{usec}`
-        return true
-      else
-        @log.info "Adjusting time #{sec} sec and #{nsec} nsec"
-        ret = ChangeTime.new.phase(sec,nsec)
-        return ret < 0 ? false : true
-      end
+    def adjOffset(adj)
+      @log.info "Adjusting time #{adj} sec"
+      ret = ChangeTime.new.phase_adj(adj)
+      @log.info ret.to_s
     end
 
   end
