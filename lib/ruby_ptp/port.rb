@@ -4,6 +4,7 @@ require 'ipaddr'
 require 'thread'
 require 'bigdecimal'
 require 'logger'
+require 'fcntl'
 
 module RubyPtp
 
@@ -66,6 +67,7 @@ module RubyPtp
 
       # Create event socket
       @event_socket = setupEventSocket(options[:interface])
+      @clock_id     = get_clock_id(options[:phc])
 
       # Generate socket for general messages
       @general_socket = UDPSocket.new
@@ -131,6 +133,12 @@ module RubyPtp
 
     private
 
+    # Get clock_id of phc
+    def get_clock_id(path)
+      fd = IO.sysopen(path, Fcntl::O_RDWR)
+      # From missing.h in linuxptp
+      (fd << 3) | 3
+    end
 
     # Either setup socket in HW or SW timestamping mode
     def setupEventSocket(interface)
@@ -326,6 +334,9 @@ module RubyPtp
 
       # Adjust phase
       adjOffset(@phase_err_avg.last.to_f)
+
+      # Adjust frequency when we have some point of measurement
+      adjOffset(@freq_err_avg.last.to_f) if @freq_err_avg[-10]
 
       # Final cleanup
       @activestamps.fill(nil,0,4)

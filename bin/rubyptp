@@ -22,6 +22,7 @@ end
 opts = Slop.parse do |o|
   o.bool '-h', '--help', 'print this help message'
   o.string '-i', '--interface', 'listen interface'
+  o.string '-p', '--phc', 'hardware clock path', default: nil
   o.bool '-s', '--software', 'get timestamps using software, else hardware'
   o.bool '-v', '--verbose', 'enable verbose mode'
   o.bool '-q', '--quiet', 'suppress output (quiet mode)'
