@@ -17,6 +17,7 @@ module RubyPtp
     SIOCSHWTSTAMP      = 0x89b0
     TAI_OFFSET         = 0 # TAI is 36 seconds in front of UTC
     ALPHA              = BigDecimal.new(0.75,9)
+    ALPHA_FREQ         = BigDecimal.new(0.95,9)
 
     STATES = {INITIALIZING: 0x01,
               FAULTY:       0x02,
@@ -114,16 +115,16 @@ module RubyPtp
           i += 1
         end
         print "\n"
-        puts "Logging offset:"
+        puts "Logging offset avg:"
         i=0
-        @phase_error.each do |d|
+        @phase_err_avg.each do |d|
           print "(#{i},#{(d * 1_000_000_000).to_f})"
           i += 1
         end
         print "\n"
-        puts "Logging frequency_error:"
+        puts "Logging frequency_error avg:"
         i=0
-        @freq_error.each do |d|
+        @freq_err_avg.each do |d|
           print "(#{i},#{d.to_f})"
           i += 1
         end
@@ -302,7 +303,7 @@ module RubyPtp
       # Calculate phase error and average phase_error
       @phase_error << ((t2 - t1) - (t4 - t3)) / BigDecimal.new(2)
 
-      # Calculate average if multiple data points exists
+      # Calculate average phase error if multiple data points exists
       avg = @phase_error[-1]
       if @phase_err_avg[-1]
         avg = ALPHA * @phase_err_avg[-1] + (BigDecimal.new(1) - ALPHA) * @phase_error[-1]
@@ -318,11 +319,21 @@ module RubyPtp
         @freq_error << (t1 - ot1) / ((t2 + de) - (ot2 + ode))
       end
 
+      # Calculate average frequency error if multiple data points exists
+      if @freq_error[-1]
+        avg = @freq_error[-1]
+        if @freq_err_avg[-1]
+          avg = ALPHA_FREQ * @freq_err_avg[-1] + (BigDecimal.new(1) - ALPHA_FREQ) * @freq_error[-1]
+        end
+        @freq_err_avg << avg
+      end
+
       # TODO: Update system
       @log.info "Delay: #{@delay.last.to_f}, " \
         "phase_err: #{@phase_error.last.to_f}, "\
         "phase_err_avg: #{@phase_err_avg.last.to_f}, "\
-        "freq_err: #{@freq_error.last.to_f if @freq_error}"
+        "freq_err: #{@freq_error.last.to_f}, "\
+        "freq_err_avg: #{@freq_err_avg.last.to_f}"
 
       # Adjust phase
       adjOffset(@phase_err_avg.last.to_f)
