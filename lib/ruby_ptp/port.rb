@@ -59,7 +59,7 @@ module RubyPtp
       @delay         = []
       @phase_error   = []
       @phase_err_avg = []
-      @freq_error    = []
+      @freq_error    = [1]
       @freq_err_avg  = []
       @sync_id       = -1
       @activestamps  = [].fill(nil, 0, 4)
@@ -108,27 +108,17 @@ module RubyPtp
 
       Signal.trap("INT") {
         @state = STATES[:DISABLED]
-        puts "Logging delay:"
-        i=0
-        @delay.each do |d|
-          print "(#{i},#{(d * 1_000_000_000).to_f})"
-          i += 1
-        end
-        print "\n"
-        puts "Logging offset avg:"
-        i=0
-        @phase_err_avg.each do |d|
-          print "(#{i},#{(d * 1_000_000_000).to_f})"
-          i += 1
-        end
-        print "\n"
-        puts "Logging frequency_error avg:"
-        i=0
-        @freq_err_avg.each do |d|
-          print "(#{i},#{d.to_f})"
-          i += 1
-        end
-        print "\n"
+
+        data = [
+          {name: "delay", data: @delay},
+          {name: "phase_err", data: @phase_error},
+          {name: "phase_err_avg", data: @phase_err_avg},
+          {name: "freq_err", data: @freq_error},
+          {name: "freq_err_avg", data: @freq_err_avg}
+        ]
+
+        RubyPtp::Helper.write_data(files: data,
+                                   path: "/home/cmol/DTU/bachalor/data/")
         puts "Trying gracefull shutdown (2sec)"
         sleep(2)
         event.terminate unless @event_socket.closed?
