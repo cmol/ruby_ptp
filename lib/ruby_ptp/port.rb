@@ -55,11 +55,11 @@ module RubyPtp
 
       # Ready object for saving timestamps
       @savestamps    = options[:savestamps] || 3
-      @timestamps    = [].fill(nil, 0, @savestamps)
+      @timestamps    = []
       @delay         = []
       @phase_error   = []
       @phase_err_avg = []
-      @freq_error    = [1]
+      @freq_error    = []
       @freq_err_avg  = []
       @sync_id       = -1
       @activestamps  = [].fill(nil, 0, 4)
@@ -278,8 +278,7 @@ module RubyPtp
     def updateTime
 
       # Cleanup phase
-      @timestamps.shift
-      @timestamps << @activestamps
+      @timestamps << @activestamps.map {|s| s.to_f}
 
       t1, t2, t3, t4 = @activestamps
       @log.debug "t1: #{t1.to_f}, "\
@@ -302,11 +301,11 @@ module RubyPtp
 
       # Calculate frequency error
       if @timestamps[-2]
-        ot1 = @timestamps[-2][0].to_f
-        ot2 = @timestamps[-2][1].to_f
+        ot1 = @timestamps[-2][0]
+        ot2 = @timestamps[-2][1]
         ode = @delay[-2].to_f
         de  = @delay.last.to_f
-        @freq_error << (t1 - ot1) / ((t2 + de) - (ot2 + ode))
+        @freq_error << (t1.to_f - ot1) / ((t2.to_f + de) - (ot2 + ode))
       end
 
       # Calculate average frequency error if multiple data points exists
