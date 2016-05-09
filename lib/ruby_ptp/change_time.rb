@@ -11,6 +11,7 @@ module RubyPtp
       builder.include '<stdlib.h>'
       builder.include '<time.h>'
       builder.include '<sys/time.h>'
+      builder.include '<sys/types.h>'
       builder.include '<sys/timex.h>'
       builder.include '<string.h>'
       builder.include '<signal.h>'
@@ -20,7 +21,7 @@ module RubyPtp
       builder.add_compile_flags("-std=c99", "-lrt")
 
       builder.c '
-int phase_adj(double adj, clockid_t id) {
+int phase_adj(double adj, long clkid) {
   #ifndef ADJ_SETOFFSET
   #define ADJ_SETOFFSET 0x0100
   #endif
@@ -35,10 +36,10 @@ int phase_adj(double adj, clockid_t id) {
     int nsec = (int) ((adj - sec) * 1000000000);
     printf("%d\n",nsec);
     //gettimeofday(&tv, 0);
-    clock_gettime(id, &ts);
+    clock_gettime(clkid, &ts);
     ts.tv_sec  -= sec;
     ts.tv_nsec -= nsec;
-    clock_settime(id, &ts);
+    clock_settime(clkid, &ts);
     //settimeofday(&tv, 0);
     return 17;
   }
@@ -57,7 +58,7 @@ int phase_adj(double adj, clockid_t id) {
     tx.time.tv_usec = nsec;
 
     tx.modes = ADJ_SETOFFSET | ADJ_NANO;
-    ret = clock_adjtime(id, &tx);
+    ret = clock_adjtime(clkid, &tx);
 
     return ret;
   }
