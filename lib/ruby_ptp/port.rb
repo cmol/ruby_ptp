@@ -67,7 +67,7 @@ module RubyPtp
 
       # Create event socket
       @event_socket = setupEventSocket(options[:interface])
-      @clock_id     = get_clock_id(options[:phc])
+      @clock_id     = getClockId(options[:phc])
 
       # Generate socket for general messages
       @general_socket = UDPSocket.new
@@ -134,7 +134,7 @@ module RubyPtp
     private
 
     # Get clock_id of phc
-    def get_clock_id(path)
+    def getClockId(path)
       fd = IO.sysopen(path, Fcntl::O_RDWR)
       # From missing.h in linuxptp
       (fd << 3) | 3
@@ -336,7 +336,7 @@ module RubyPtp
       adjOffset(@phase_err_avg.last.to_f)
 
       # Adjust frequency when we have some point of measurement
-      adjOffset(@freq_err_avg.last.to_f) if @freq_err_avg[-10]
+      adjFreq(@freq_err_avg.last.to_f) if @freq_err_avg[-10]
 
       # Final cleanup
       @activestamps.fill(nil,0,4)
