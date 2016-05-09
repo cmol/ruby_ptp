@@ -431,7 +431,14 @@ module RubyPtp
     # Adjust system time
     def adjOffset(adj)
       @log.info "Adjusting time #{adj} sec"
-      ret = ChangeTime.new.phase_adj(adj)
+      ret = ChangeTime.new.phase_adj(adj, @clock_id)
+      @log.info ret.to_s
+    end
+
+    # Adjust system time
+    def adjFreq(adj)
+      @log.info "Adjusting frequency #{adj} parts (relative to current)"
+      ret = ChangeTime.new.freq_adj(adj, @clock_id)
       @log.info ret.to_s
     end
 

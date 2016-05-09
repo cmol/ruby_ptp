@@ -20,7 +20,7 @@ module RubyPtp
       builder.add_compile_flags("-std=c99", "-lrt")
 
       builder.c '
-int phase_adj(double adj) {
+int phase_adj(double adj, clockid_t id) {
   #ifndef ADJ_SETOFFSET
   #define ADJ_SETOFFSET 0x0100
   #endif
@@ -30,14 +30,16 @@ int phase_adj(double adj) {
 
   // Do coarse time adjustment
   if (fabs(adj) > 0.00005) {
-    struct timeval tv;
+    struct timespec ts;
     int sec  = (int) adj;
-    int nsec = (int) ((adj - sec) * 1000000);
+    int nsec = (int) ((adj - sec) * 1000000000);
     printf("%d\n",nsec);
-    gettimeofday(&tv, 0);
-    tv.tv_sec  -= sec;
-    tv.tv_usec -= nsec;
-    settimeofday(&tv, 0);
+    //gettimeofday(&tv, 0);
+    clock_gettime(id, &ts);
+    ts.tv_sec  -= sec;
+    ts.tv_nsec -= nsec;
+    clock_settime(id, &ts);
+    //settimeofday(&tv, 0);
     return 17;
   }
   else {
@@ -55,7 +57,7 @@ int phase_adj(double adj) {
     tx.time.tv_usec = nsec;
 
     tx.modes = ADJ_SETOFFSET | ADJ_NANO;
-    ret = adjtimex(&tx);
+    ret = clock_adjtime(id, &tx);
 
     return ret;
   }
