@@ -21,6 +21,27 @@ module RubyPtp
       builder.add_compile_flags("-std=c99", "-lrt")
 
       builder.c '
+int freq_adj(double adj, long clkid) {
+  struct timex tx;
+  int ret;
+  clock_adjtime(clkid, &tx);
+  long curfreq = tx.freq;
+  long tick    = tx.tick;
+
+  curfreq += tick * 65536;
+  long newfreq = (long) (((double) curfreq) * adj);
+  long newtick = newfreq / 65536;
+  newfreq = newfreq % 65536;
+
+  tx.tick = newtick;
+  tx.freq = newfreq;
+  tx.modes |= ADJ_FREQUENCY | ADJ_TICK;
+  ret = clock_adjtime(clkid, &tx);
+
+  return ret;
+}'
+
+      builder.c '
 int phase_adj(double adj, long clkid) {
   #ifndef ADJ_SETOFFSET
   #define ADJ_SETOFFSET 0x0100
