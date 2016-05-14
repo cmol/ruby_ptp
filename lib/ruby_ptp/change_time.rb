@@ -24,19 +24,28 @@ module RubyPtp
 int freq_adj(double adj, long clkid) {
   struct timex tx;
   int ret;
-  clock_adjtime(clkid, &tx);
+  //clock_adjtime(clkid, &tx);
+  adjtimex(&tx);
   long curfreq = tx.freq;
   long tick    = tx.tick;
+  printf("freq: %d\n", curfreq);
+  printf("tick: %d\n", tick);
 
-  curfreq += tick * 65536;
-  long newfreq = (long) (((double) curfreq) * adj);
-  long newtick = newfreq / 65536;
-  newfreq = newfreq % 65536;
+  curfreq += tick * 6553600;
+  long long newfreq = (long) (((double) curfreq) * adj);
+  long newtick = newfreq / 6553600;
+  newfreq = newfreq % 6553600;
+  printf("new freq: %d\n", newfreq);
+  printf("new tick: %d\n", newtick);
 
   tx.tick = newtick;
   tx.freq = newfreq;
   tx.modes |= ADJ_FREQUENCY | ADJ_TICK;
-  ret = clock_adjtime(clkid, &tx);
+  //ret = clock_adjtime(clkid, &tx);
+  ret = adjtimex(&tx);
+  if(ret < 0) {
+    printf("%s\n", strerror(errno));
+  }
 
   return ret;
 }'
