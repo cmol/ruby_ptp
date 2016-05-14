@@ -18,7 +18,7 @@ module RubyPtp
     SIOCSHWTSTAMP      = 0x89b0
     TAI_OFFSET         = 0 # TAI is 36 seconds in front of UTC
     ALPHA              = BigDecimal.new(0.75,9)
-    ALPHA_FREQ         = BigDecimal.new(0.95,9)
+    ALPHA_FREQ         = BigDecimal.new(0.99,9)
 
     STATES = {INITIALIZING: 0x01,
               FAULTY:       0x02,
@@ -135,6 +135,7 @@ module RubyPtp
 
     # Get clock_id of phc
     def getClockId(path)
+      return 0 unless path
       fd = IO.sysopen(path, Fcntl::O_RDWR)
       # From missing.h in linuxptp
       (fd << 3) | 3
@@ -313,7 +314,13 @@ module RubyPtp
         ot2 = @timestamps[-2][1]
         ode = @delay[-2].to_f
         de  = @delay.last.to_f
-        @freq_error << (t1.to_f - ot1) / ((t2.to_f + de) - (ot2 + ode))
+        error = (t1.to_f - ot1) / ((t2.to_f + de) - (ot2 + ode))
+        # Do some hard filtering of data
+        if error.abs < 10
+          @freq_error << error
+        else
+          @freq_error << @freq_error[-1]
+        end
       end
 
       # Calculate average frequency error if multiple data points exists
