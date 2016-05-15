@@ -17,7 +17,7 @@ module RubyPtp
     GENERAL_PORT       = 320
     SIOCSHWTSTAMP      = 0x89b0
     TAI_OFFSET         = 0 # TAI is 36 seconds in front of UTC
-    ALPHA              = BigDecimal.new(0.75,9)
+    ALPHA              = BigDecimal.new(0.98,9)
     ALPHA_FREQ         = BigDecimal.new(0.99,9)
 
     STATES = {INITIALIZING: 0x01,
@@ -61,7 +61,7 @@ module RubyPtp
       @phase_error   = []
       @phase_err_avg = []
       @freq_error    = []
-      @freq_err_avg  = []
+      @freq_err_avg  = [1]
       @sync_id       = -1
       @activestamps  = [].fill(nil, 0, 4)
 
@@ -93,7 +93,6 @@ module RubyPtp
           msg, addr, rflags, *cfg = @general_socket.recvmsg
           parseGeneral(msg, addr, rflags, cfg)
         end
-        @general_socket.close
       end
 
       @log.debug "Starting event thread"
@@ -105,7 +104,6 @@ module RubyPtp
           sw_ts = clock_gettime
           parseEvent(msg, addr, rflags, cfg, sw_ts)
         end
-        @event_socket.close
       end
 
       Signal.trap("INT") {
@@ -122,6 +120,8 @@ module RubyPtp
         RubyPtp::Helper.write_data(files: data,
                                    path: "/home/cmol/DTU/bachalor/data/")
         puts "Trying gracefull shutdown (2sec)"
+        @general_socket.close
+        @event_socket.close
         sleep(2)
         event.terminate unless @event_socket.closed?
         general.terminate unless @general_socket.closed?
@@ -194,7 +194,7 @@ module RubyPtp
           now = hw_ts
         end
       end
-       now = [now[0] + TAI_OFFSET, now[1]]
+      now = [now[0] + TAI_OFFSET, now[1]]
 
       # Figure out what to do with the packages
       case message.type
@@ -309,17 +309,19 @@ module RubyPtp
       @phase_err_avg << avg
 
       # Calculate frequency error
-      if @timestamps[-2]
-        ot1 = @timestamps[-2][0]
-        ot2 = @timestamps[-2][1]
-        ode = @delay[-2].to_f
+      distance = -2
+      if @timestamps[distance]
+        ot1 = @timestamps[distance][0]
+        ot2 = @timestamps[distance][1]
+        ode = @delay[distance].to_f
         de  = @delay.last.to_f
         error = (t1.to_f - ot1) / ((t2.to_f + de) - (ot2 + ode))
         # Do some hard filtering of data
-        if error.abs < 10
+        if error < 1.4 && error > 0.6
           @freq_error << error
         else
-          @freq_error << @freq_error[-1]
+          puts error
+          @freq_error << @freq_error[-1] || 1
         end
       end
 
@@ -333,10 +335,10 @@ module RubyPtp
       end
 
       # TODO: Update system
-      @log.info "Delay: #{@delay.last.to_f}, " \
-        "phase_err: #{@phase_error.last.to_f}, "\
-        "phase_err_avg: #{@phase_err_avg.last.to_f}, "\
-        "freq_err: #{@freq_error.last.to_f}, "\
+      @log.info "Delay: #{@delay.last.to_f} \t" \
+        "phase_err: #{@phase_error.last.to_f} \t"\
+        "phase_err_avg: #{@phase_err_avg.last.to_f}, \t"\
+        "freq_err: #{@freq_error.last.to_f} \t"\
         "freq_err_avg: #{@freq_err_avg.last.to_f}"
 
       # Adjust phase
