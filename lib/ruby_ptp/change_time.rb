@@ -24,28 +24,44 @@ module RubyPtp
 int freq_adj(double adj, long clkid) {
   struct timex tx;
   int ret;
-  //clock_adjtime(clkid, &tx);
-  adjtimex(&tx);
+  if (clkid == 0) {
+    memset(&tx, 0, sizeof(tx));
+    adjtimex(&tx);
+  }
+  else {
+    clock_adjtime(clkid, &tx);
+  }
+
   long curfreq = tx.freq;
   long tick    = tx.tick;
   printf("freq: %d\n", curfreq);
   printf("tick: %d\n", tick);
 
   curfreq += tick * 6553600;
-  long long newfreq = (long) (((double) curfreq) * adj);
-  long newtick = newfreq / 6553600;
-  newfreq = newfreq % 6553600;
+  long long newfreq = (long long) (((double)curfreq) * adj);
+  long newtick = 0;
+  if (clkid == 0) {
+    newtick = newfreq / 6553600;
+    newfreq = newfreq % 6553600;
+  }
   printf("new freq: %d\n", newfreq);
   printf("new tick: %d\n", newtick);
 
+  memset(&tx, 0, sizeof(tx));
   tx.tick = newtick;
   tx.freq = newfreq;
-  tx.modes |= ADJ_FREQUENCY | ADJ_TICK;
-  //ret = clock_adjtime(clkid, &tx);
-  ret = adjtimex(&tx);
-  if(ret < 0) {
-    printf("%s\n", strerror(errno));
+  if (clkid == 0) {
+    tx.modes |= ADJ_FREQUENCY | ADJ_TICK;
+    ret = adjtimex(&tx);
   }
+  else {
+    tx.modes |= ADJ_FREQUENCY;
+    ret = clock_adjtime(clkid, &tx);
+  }
+
+  //if(ret < 0) {
+  //  printf("%s\n", strerror(errno));
+  //}
 
   return ret;
 }'
