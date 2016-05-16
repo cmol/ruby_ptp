@@ -26,9 +26,10 @@ int freq_adj(double adj, long clkid) {
   int ret;
   if (clkid == 0) {
     memset(&tx, 0, sizeof(tx));
-    adjtimex(&tx);
+    clock_adjtime(CLOCK_REALTIME, &tx);
   }
   else {
+    memset(&tx, 0, sizeof(tx));
     clock_adjtime(clkid, &tx);
   }
 
@@ -52,7 +53,7 @@ int freq_adj(double adj, long clkid) {
   tx.freq = newfreq;
   if (clkid == 0) {
     tx.modes |= ADJ_FREQUENCY | ADJ_TICK;
-    ret = adjtimex(&tx);
+    ret = clock_adjtime(CLOCK_REALTIME, &tx);
   }
   else {
     tx.modes |= ADJ_FREQUENCY;
