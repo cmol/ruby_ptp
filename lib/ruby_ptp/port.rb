@@ -18,7 +18,7 @@ module RubyPtp
     SIOCSHWTSTAMP      = 0x89b0
     TAI_OFFSET         = 0 # TAI is 36 seconds in front of UTC
     ALPHA              = BigDecimal.new(0.98,9)
-    ALPHA_FREQ         = BigDecimal.new(0.99,9)
+    ALPHA_FREQ         = BigDecimal.new(0.999,9)
 
     STATES = {INITIALIZING: 0x01,
               FAULTY:       0x02,
@@ -64,6 +64,10 @@ module RubyPtp
       @freq_err_avg  = [1]
       @sync_id       = -1
       @activestamps  = [].fill(nil, 0, 4)
+
+      # State "timer" test
+      @flipflop     = 0
+      @flipflopeach = 5
 
       # Create event socket
       @event_socket = setupEventSocket(options[:interface])
@@ -138,7 +142,7 @@ module RubyPtp
       return 0 unless path
       fd = IO.sysopen(path, Fcntl::O_RDWR)
       # From missing.h in linuxptp
-      (fd << 3) | 3
+      fd
     end
 
     # Either setup socket in HW or SW timestamping mode
@@ -149,12 +153,12 @@ module RubyPtp
 
       # If we are trying to do HW stamps, we need to initialise the network
       # interface to actually make the timestamps.
-      if @ts_mode == :TIMESTAMPHW
+      if @ts_mode == :TIMESTAMPHW || true
 
         # Construct the command for the network interface in a slightly crude
         # way according to:
         # https://www.kernel.org/doc/Documentation/networking/timestamping.txt
-        hwstamp_config = [0,1,5].pack("iii")
+        hwstamp_config = [0,1,1].pack("iii")
         ifreq = interface.ljust(16,"\x00") + [hwstamp_config].pack("P")
         # Make sure things worked
         if socket.ioctl(SIOCSHWTSTAMP, ifreq) != 0
@@ -180,7 +184,7 @@ module RubyPtp
       @log.debug message.inspect
 
       # Get timestamps from socket
-      hw_ts, sw_ts = getTimestamps(cfg)
+      sw_ts, hw_ts = getTimestamps(cfg)
 
       # Firstly try the TIMESTAMPNS
       now = sw_ts if sw_ts
@@ -317,10 +321,10 @@ module RubyPtp
         de  = @delay.last.to_f
         error = (t1.to_f - ot1) / ((t2.to_f + de) - (ot2 + ode))
         # Do some hard filtering of data
-        if error < 1.4 && error > 0.6
+        if error < 10 && error > 0.0
           @freq_error << error
         else
-          puts error
+          puts "ERROR ERROR ERROR ERROR " + error.to_s
           @freq_error << @freq_error[-1] || 1
         end
       end
@@ -342,7 +346,7 @@ module RubyPtp
         "freq_err_avg: #{@freq_err_avg.last.to_f}"
 
       # Adjust phase
-      adjOffset(@phase_err_avg.last.to_f)
+      #adjOffset(@phase_err_avg.last.to_f)
 
       # Adjust frequency when we have some point of measurement
       adjFreq(@freq_err_avg.last.to_f) if @freq_err_avg[-10]
@@ -417,7 +421,7 @@ module RubyPtp
       now = sw_ts if sw_ts
 
       # Try to get hardware timestamps if we have them
-      if @ts_mode == :TIMESTAMPHW && false
+      if @ts_mode == :TIMESTAMPHW
         if hw_ts == nil
           @log.error "No hardware timestamps available after Delay_Req. " \
             "Using software"

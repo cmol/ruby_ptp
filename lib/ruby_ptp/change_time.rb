@@ -18,6 +18,10 @@ module RubyPtp
       builder.include '<unistd.h>'
       builder.include '<errno.h>'
       builder.include '<math.h>'
+      builder.prefix <<-END
+#define CLOCKFD 3
+#define FD_TO_CLOCKID(fd)((~(clockid_t) (fd) << 3) | CLOCKFD)
+END
       builder.add_compile_flags("-std=c99", "-lrt")
 
       builder.c '
@@ -30,7 +34,7 @@ int freq_adj(double adj, long clkid) {
   }
   else {
     memset(&tx, 0, sizeof(tx));
-    clock_adjtime(clkid, &tx);
+    clock_adjtime(FD_TO_CLOCKID(clkid), &tx);
   }
 
   long curfreq = tx.freq;
@@ -45,6 +49,11 @@ int freq_adj(double adj, long clkid) {
     newtick = newfreq / 6553600;
     newfreq = newfreq % 6553600;
   }
+  else {
+    newfreq = curfreq + ((long) ((adj - 1) * 10000000));
+    newfreq = 0;
+    newtick = tick + ((long) ((adj - 1) * 10000000000));
+  }
   printf("new freq: %d\n", newfreq);
   printf("new tick: %d\n", newtick);
 
@@ -57,12 +66,12 @@ int freq_adj(double adj, long clkid) {
   }
   else {
     tx.modes |= ADJ_FREQUENCY;
-    ret = clock_adjtime(clkid, &tx);
+    ret = clock_adjtime(FD_TO_CLOCKID(clkid), &tx);
   }
 
-  //if(ret < 0) {
-  //  printf("%s\n", strerror(errno));
-  //}
+  if(ret < 0) {
+    printf("%s\n", strerror(errno));
+  }
 
   return ret;
 }'
@@ -76,6 +85,13 @@ int phase_adj(double adj, long clkid) {
   struct timex tx;
   int ret;
 
+  if (clkid == 0) {
+    clkid = CLOCK_REALTIME;
+  }
+  else {
+    clkid = FD_TO_CLOCKID(clkid);
+  }
+
   // Do coarse time adjustment
   if (fabs(adj) > 0.00005) {
     struct timespec ts;
@@ -86,9 +102,9 @@ int phase_adj(double adj, long clkid) {
     clock_gettime(clkid, &ts);
     ts.tv_sec  -= sec;
     ts.tv_nsec -= nsec;
-    clock_settime(clkid, &ts);
+    ret = clock_settime(clkid, &ts);
     //settimeofday(&tv, 0);
-    return 17;
+    return ret;
   }
   else {
     int sign = adj < 0 ? -1 : 1;
