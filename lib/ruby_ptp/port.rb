@@ -308,7 +308,8 @@ module RubyPtp
       # Calculate average phase error if multiple data points exists
       avg = @phase_error[-1]
       if @phase_err_avg[-1]
-        avg = ALPHA * @phase_err_avg[-1] + (BigDecimal.new(1) - ALPHA) * @phase_error[-1]
+        one = BigDecimal.new(1)
+        avg = ALPHA * @phase_err_avg[-1] + (one - ALPHA) * @phase_error[-1]
       end
       @phase_err_avg << avg
 
