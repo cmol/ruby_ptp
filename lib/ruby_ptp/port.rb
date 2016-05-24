@@ -18,7 +18,7 @@ module RubyPtp
     SIOCSHWTSTAMP      = 0x89b0
     TAI_OFFSET         = 0 # TAI is 36 seconds in front of UTC
     ALPHA              = BigDecimal.new(0.98,9)
-    ALPHA_FREQ         = BigDecimal.new(0.999,9)
+    ALPHA_F            = BigDecimal.new(0.999,9)
 
     STATES = {INITIALIZING: 0x01,
               FAULTY:       0x02,
@@ -325,7 +325,7 @@ module RubyPtp
         if error < 10 && error > 0.0
           @freq_error << error
         else
-          puts "ERROR ERROR ERROR ERROR " + error.to_s
+          puts "ERROR ERROR ERROR ERROR " + error.to_s # Why?
           @freq_error << @freq_error[-1] || 1
         end
       end
@@ -334,7 +334,8 @@ module RubyPtp
       if @freq_error[-1]
         avg = @freq_error[-1]
         if @freq_err_avg[-1]
-          avg = ALPHA_FREQ * @freq_err_avg[-1] + (BigDecimal.new(1) - ALPHA_FREQ) * @freq_error[-1]
+          one = BigDecimal.new(1)
+          avg = ALPHA_F * @freq_err_avg[-1] + (one - ALPHA_F) * @freq_error[-1]
         end
         @freq_err_avg << avg
       end
