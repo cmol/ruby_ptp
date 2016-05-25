@@ -331,7 +331,9 @@ module RubyPtp
       end
 
       # Calculate average frequency error if multiple data points exists
-      if @freq_error[-1]
+      if @freq_error[-1] && @flipflop - 1 < @flipflopeach
+        @freq_err_avg << @freq_err_avg
+      elsif @freq_error[-1]
         avg = @freq_error[-1]
         if @freq_err_avg[-1]
           one = BigDecimal.new(1)
@@ -348,13 +350,19 @@ module RubyPtp
         "freq_err_avg: #{@freq_err_avg.last.to_f}"
 
       # Adjust phase
-      #adjOffset(@phase_err_avg.last.to_f)
+      adjOffset(@phase_err_avg.last.to_f) if @flipflop < @flipflopeach
 
-      # Adjust frequency when we have some point of measurement
-      adjFreq(@freq_err_avg.last.to_f) if @freq_err_avg[-10]
+      # Adjust frequency when we have some point of measurement and when we can
+      # actually make adjustments in the flipflop thing.
+      if @freq_err_avg[-10] && @flipflop >= @flipflopeach
+        adjFreq(@freq_err_avg.last.to_f)
+      end
 
       # Final cleanup
       @activestamps.fill(nil,0,4)
+
+      # Adjust flipflop
+      @flipflop = (@flipflop + 1) % (2 * @flipflopeach)
     end
 
     # Convert sec and nsec to a BigDecimal number for better than float
