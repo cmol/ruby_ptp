@@ -332,7 +332,7 @@ module RubyPtp
 
       # Calculate average frequency error if multiple data points exists
       if @freq_error[-1] && @flipflop - 1 < @flipflopeach
-        @freq_err_avg << @freq_err_avg
+        @freq_err_avg << @freq_err_avg.last
       elsif @freq_error[-1]
         avg = @freq_error[-1]
         if @freq_err_avg[-1]
