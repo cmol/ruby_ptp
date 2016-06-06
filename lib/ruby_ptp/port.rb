@@ -58,6 +58,7 @@ module RubyPtp
       @savestamps    = options[:savestamps] || 3
       @timestamps    = []
       @delay         = []
+      @delay_avg     = []
       @phase_error   = []
       @phase_err_avg = []
       @freq_error    = []
@@ -115,10 +116,13 @@ module RubyPtp
 
         data = [
           {name: "delay", data: @delay},
+          {name: "delay_avg", data: @delay_avg},
           {name: "phase_err", data: @phase_error},
           {name: "phase_err_avg", data: @phase_err_avg},
+          {name: "phase_err_avg_pos", data: @phase_err_avg.map(&:abs)},
           {name: "freq_err", data: @freq_error},
-          {name: "freq_err_avg", data: @freq_err_avg}
+          {name: "freq_err_avg", data: @freq_err_avg},
+          {name: "freq_err_avg_pos", data: @freq_err_avg.map(&:abs)}
         ]
 
         RubyPtp::Helper.write_data(files: data,
@@ -208,8 +212,13 @@ module RubyPtp
         if @slave_state == :WAIT_FOR_SYNC ||
             (message.sequenceId > @sync_id &&
              @slave_state == :WAIT_FOR_FOLLOW_UP)
-          if message.originTimestamp == -1
 
+          # Record correctionField time
+          cfs = BigDecimal.new((message.correctionField * 65535.0) / 1e9, 9)
+          recordTimestamps(cfs: cfs)
+
+          # If it's a two step clock
+          if message.originTimestamp == -1
             # In case the follow_up arrives first we need to deal with changing
             # the order in which we are working. When the sequence ID is
             # already up to date, we'll go straight to delay_req as we should
@@ -226,6 +235,7 @@ module RubyPtp
             end
             @sync_id = message.sequenceId
 
+          # If it's a one step clock
           else
             t1 = timeArrToBigDec(*message.originTimestamp)
             t2 = timeArrToBigDec(*now)
@@ -270,6 +280,8 @@ module RubyPtp
       when Message::DELAY_RESP
         if @slave_state == :WAIT_FOR_DELAY_RESP
           recordTimestamps(t4: timeArrToBigDec(*message.receiveTimestamp))
+          cfd = BigDecimal.new((message.correctionField * 65535.0) / 1e9, 9)
+          recordTimestamps(cfd: cfd)
           updateTime()
           @slave_state = :WAIT_FOR_SYNC
         end
@@ -279,11 +291,13 @@ module RubyPtp
     end
 
     # Update whatever timestamps are being thrown at us
-    def recordTimestamps(t1: nil, t2: nil, t3: nil, t4: nil)
-      @activestamps[0] = t1 if t1
-      @activestamps[1] = t2 if t2
-      @activestamps[2] = t3 if t3
-      @activestamps[3] = t4 if t4
+    def recordTimestamps(t1: nil, t2: nil, t3: nil, t4: nil, cfs: nil, cfd: nil)
+      @activestamps[0] = t1  if t1
+      @activestamps[1] = t2  if t2
+      @activestamps[2] = t3  if t3
+      @activestamps[3] = t4  if t4
+      @activestamps[4] = cfs if cfs
+      @activestamps[5] = cfd if cfd
     end
 
     # Do some actual calculations on the time updating and bookeeping of
@@ -293,17 +307,26 @@ module RubyPtp
       # Cleanup phase
       @timestamps << @activestamps.map {|s| s.to_f}
 
-      t1, t2, t3, t4 = @activestamps
+      t1, t2, t3, t4, cfs, cfd = @activestamps
       @log.debug "t1: #{t1.to_f}, "\
        "t2: #{t2.to_f}, "\
        "t3: #{t3.to_f}, "\
-       "t4: #{t4.to_f}"
+       "t4: #{t4.to_f}, "\
+       "cfs: #{cfs.to_f}, "\
+       "cfd: #{t4.to_f}"
 
-      # Calculate link delay
-      delay = ((t2 - t1) + (t4 - t3)) / BigDecimal.new(2)
+      # Calculate link delay and average link delay
+      delay = ((t2 - t1) + (t4 - t3) - cfs - cfd) / BigDecimal.new(2)
       @delay << (delay.to_f > 0 ? delay : delay * -1)
+      delay_avg = @delay[-1]
+      if @delay_avg[-1]
+        one = BigDecimal.new(1)
+        delay_avg = ALPHA * @delay_avg[-1] + (one - ALPHA) * @delay[-1]
+      end
+      @delay_avg << delay_avg
+
       # Calculate phase error and average phase_error
-      @phase_error << ((t2 - t1) - (t4 - t3)) / BigDecimal.new(2)
+      @phase_error << ((t2 - t1) - (t4 - t3) - cfs + cfd) / BigDecimal.new(2)
 
       # Calculate average phase error if multiple data points exists
       avg = @phase_error[-1]
@@ -316,13 +339,14 @@ module RubyPtp
       # Calculate frequency error
       distance = -2
       if @timestamps[distance]
-        ot1 = @timestamps[distance][0]
-        ot2 = @timestamps[distance][1]
-        ode = @delay[distance].to_f
-        de  = @delay.last.to_f
-        error = (t1.to_f - ot1) / ((t2.to_f + de) - (ot2 + ode))
+        ot1   = @timestamps[distance][0]
+        ot2   = @timestamps[distance][1]
+        ode   = @delay_avg[distance].to_f
+        de    = @delay_avg.last.to_f
+        ocfs  = @timestamps[distance][4].to_f
+        error = (t1.to_f - ot1)/((t2.to_f + de + cfs.to_f)-(ot2 + ode + ocfs))
         # Do some hard filtering of data
-        if error < 10 && error > 0.0
+        if error < 2 && error > 0.0
           @freq_error << error
         else
           puts "ERROR ERROR ERROR ERROR " + error.to_s # Why?
@@ -344,6 +368,7 @@ module RubyPtp
 
       # TODO: Update system
       @log.info "Delay: #{@delay.last.to_f} \t" \
+        "Delay_avg: #{@delay_avg.last.to_f} \t" \
         "phase_err: #{@phase_error.last.to_f} \t"\
         "phase_err_avg: #{@phase_err_avg.last.to_f}, \t"\
         "freq_err: #{@freq_error.last.to_f} \t"\

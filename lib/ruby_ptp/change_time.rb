@@ -112,7 +112,7 @@ int phase_adj(double adj, long clkid) {
     int nsec = abs((int) (adj * 1000000000));
 
     // Fix adjust if we are adjusting the other way
-    if (sign == 1) {
+    if (sign == -1) {
       sec   = -1;
       nsec += 1000000000;
     }

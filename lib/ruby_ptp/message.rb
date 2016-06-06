@@ -57,7 +57,8 @@ module RubyPtp
         sec = (sec1 << 16) | sec2
 
         # Check if the sending clock is a two-step
-        if (@flagField & 2) == 2 || sec == 0 && nsec == 0
+        if ((@flagField & 2) == 2 && @messageType == SYNC) ||
+            sec == 0 && nsec == 0
           @originTimestamp = -1
         else
           @originTimestamp = [sec, nsec]
