@@ -38,6 +38,7 @@ int freq_adj(double adj, long clkid) {
   }
 
   long curfreq = tx.freq;
+  if(curfreq == 0) curfreq = -100;
   long tick    = tx.tick;
   printf("freq: %d\n", curfreq);
   printf("tick: %d\n", tick);
@@ -51,8 +52,8 @@ int freq_adj(double adj, long clkid) {
   }
   else {
     newfreq = curfreq + ((long) ((adj - 1) * 10000000));
-    newfreq = 0;
-    newtick = tick + ((long) ((adj - 1) * 10000000000));
+    //newfreq = 0;
+    //newtick = tick + ((long) ((adj - 1) * 10000000000));
   }
   printf("new freq: %d\n", newfreq);
   printf("new tick: %d\n", newtick);
