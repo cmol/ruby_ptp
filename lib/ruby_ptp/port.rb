@@ -346,7 +346,7 @@ module RubyPtp
         ocfs  = @timestamps[distance][4].to_f
         error = (t1.to_f - ot1)/((t2.to_f + de + cfs.to_f)-(ot2 + ode + ocfs))
         # Do some hard filtering of data
-        if error < 2 && error > 0.0
+        if error < 2 && error > 0.5
           @freq_error << error
         else
           puts "ERROR ERROR ERROR ERROR " + error.to_s # Why?
