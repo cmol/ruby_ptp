@@ -119,10 +119,10 @@ module RubyPtp
           {name: "delay_avg", data: @delay_avg},
           {name: "phase_err", data: @phase_error},
           {name: "phase_err_avg", data: @phase_err_avg},
-          {name: "phase_err_avg_pos", data: @phase_err_avg.map(&:abs)},
+          {name: "phase_err_avg_pos", data: @phase_err_avg.map{|x| x.to_f.abs}},
           {name: "freq_err", data: @freq_error},
           {name: "freq_err_avg", data: @freq_err_avg},
-          {name: "freq_err_avg_pos", data: @freq_err_avg.map(&:abs)}
+          {name: "freq_err_avg_pos", data: @freq_err_avg.map{|x| x.to_f.abs}}
         ]
 
         RubyPtp::Helper.write_data(files: data,
