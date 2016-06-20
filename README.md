@@ -1,8 +1,11 @@
 # RubyPtp
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/ruby_ptp`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
+ruby_ptp is a small daemon implementing the PTPv2 protocol for timing in
+networks. Currently running this program will leak memory as all runtime
+data is stored for testing porposes. If running this program in a live
+setting, these features must be rewritten. The code is higly
+experimental as it has been developed as part of a bachelor thesis.
+Please think about this before running this program in production!
 
 ## Installation
 
@@ -22,7 +25,16 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+```bash
+usage: ./bin/rubyptp [options]
+    -h, --help       print this help message
+    -i, --interface  listen interface
+    -p, --phc        hardware clock path
+    -s, --software   get timestamps using software, else hardware
+    -v, --verbose    enable verbose mode
+    -q, --quiet      suppress output (quiet mode)
+    --version        print the version
+```
 
 ## Development
 
@@ -32,7 +44,7 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/ruby_ptp.
+Bug reports and pull requests are welcome on GitHub at https://github.com/cmol/ruby_ptp.
 
 
 ## License
