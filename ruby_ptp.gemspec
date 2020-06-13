@@ -9,9 +9,9 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Claus Lensbøl"]
   spec.email         = ["cmol@cmol.dk"]
 
-  spec.summary       = %q{TODO: Write a short summary, because Rubygems requires one.}
-  spec.description   = %q{TODO: Write a longer description or delete this line.}
-  spec.homepage      = "TODO: Put your gem's website or public repo URL here."
+  spec.summary       = %q{Ruby implementation of PTP}
+  spec.description   = %q{Client implementation of IEEE 1588v2 PTP}
+  spec.homepage      = "https://github.com/cmol/ruby_ptp"
   spec.license       = "MIT"
 
   # Prevent pushing this gem to RubyGems.org by setting 'allowed_push_host', or
@@ -30,6 +30,8 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'RubyInline'
   spec.add_runtime_dependency 'slop'
 
-  spec.add_development_dependency "bundler", "~> 1.11"
-  spec.add_development_dependency "rake", "~> 10.0"
+  spec.add_development_dependency "bundler", ">= 2.1.4"
+  spec.add_development_dependency "rake", ">= 12.3.3"
+
+
 end
